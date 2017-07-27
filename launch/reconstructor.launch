@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<launch>
+	<arg name="rgb_topic" default="/camera/rgb" />
+	<remap to  ="$(arg rgb_topic)/camera_info" 
+		from="rgb/camera_info" />
+	<remap to  ="$(arg rgb_topic)/image_rect_color" 
+		from="rgb/image_rect_color" />
+
+	<arg name="depth_registered_topic" default="/camera/depth_registered/sw_registered" />
+	<remap to  ="$(arg depth_registered_topic)/camera_info" 
+		from="depth_registered/camera_info" />
+	<remap to  ="$(arg depth_registered_topic)/image_rect_raw" 
+		from="depth_registered/image_rect" />
+
+	<remap to  ="/vision/yolo2/detections" 
+		from="detections" />
+
+	<node name="reconstructor" output="screen" pkg="hands_3d" type="reconstruct" launch-prefix="xterm -e gdb --args" >
+	</node>
+</launch>

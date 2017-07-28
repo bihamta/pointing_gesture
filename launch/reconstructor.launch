@@ -15,6 +15,6 @@
 	<remap to  ="/vision/yolo2/detections" 
 		from="detections" />
 
-	<node name="reconstructor" output="screen" pkg="hands_3d" type="reconstruct" launch-prefix="xterm -e gdb --args" >
+	<node name="reconstructor" output="screen" pkg="hands_3d" type="reconstruct">
 	</node>
 </launch>

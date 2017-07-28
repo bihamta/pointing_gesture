@@ -253,7 +253,6 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
                                       int red_offset, int green_offset, int blue_offset, int color_step)
 {
 
-  ROS_INfO(detection_msg.get()->detections.size());
   // Use correct principal point from calibration
   float center_x = model_.cx();
   float center_y = model_.cy();
@@ -279,38 +278,38 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 
   int all_points = 0;
 
-  for( int i = 0; i < detection_msg.get()->detections.size(); i++)
+  for (int v = 0; v < int(cloud_msg->height); ++v, depth_row += row_step, rgb += rgb_skip)
   {
-    int bb_center_x, bb_center_y;
-    bb_center_x = int(detection_msg.get()->detections[i].roi.x_offset)+int(detection_msg.get()->detections[i].roi.width/2);
-    bb_center_y = int(detection_msg.get()->detections[i].roi.y_offset)+int(detection_msg.get()->detections[i].roi.height/2);
-    for (int v = 0; v < int(cloud_msg->height); ++v, depth_row += row_step, rgb += rgb_skip)
+    for (int u = 0; u < int(cloud_msg->width); ++u, rgb += color_step, ++iter_x, ++iter_y, ++iter_z, ++iter_a, ++iter_r, ++iter_g, ++iter_b)
     {
-      for (int u = 0; u < int(cloud_msg->width); ++u, rgb += color_step, ++iter_x, ++iter_y, ++iter_z, ++iter_a, ++iter_r, ++iter_g, ++iter_b)
-      {
-        T depth = depth_row[u];
-        const bool in_bb = (u <= detection_msg.get()->detections[i].roi.x_offset+detection_msg.get()->detections[i].roi.width
+      T depth = depth_row[u];
+      bool in_bb = false;
+      for( int i = 0; i < detection_msg.get()->detections.size(); i++)
+        if ((u <= detection_msg.get()->detections[i].roi.x_offset+detection_msg.get()->detections[i].roi.width
                             && u >= detection_msg.get()->detections[i].roi.x_offset)
                             && (v <= detection_msg.get()->detections[i].roi.y_offset+detection_msg.get()->detections[i].roi.height
-                            && v >= detection_msg.get()->detections[i].roi.y_offset);
-        if (in_bb) all_points++;
-        if (!in_bb || !depth_image_proc::DepthTraits<T>::valid(depth))
+                            && v >= detection_msg.get()->detections[i].roi.y_offset))
         {
-          *iter_x = *iter_y = *iter_z = bad_point;
+          in_bb = true;
+          break;
         }
-        else
-        {
-          // Fill in XYZ
-          *iter_x = (u - center_x) * depth * constant_x;
-          *iter_y = (v - center_y) * depth * constant_y;
-          *iter_z = depth_image_proc::DepthTraits<T>::toMeters(depth);
-        }
-        // Fill in color
-        *iter_a = 255;
-        *iter_r = rgb[red_offset];
-        *iter_g = rgb[green_offset];
-        *iter_b = rgb[blue_offset];
+      if (in_bb) all_points++;
+      if (!in_bb || !depth_image_proc::DepthTraits<T>::valid(depth))
+      {
+        *iter_x = *iter_y = *iter_z = bad_point;
       }
+      else
+      {
+        // Fill in XYZ
+        *iter_x = (u - center_x) * depth * constant_x;
+        *iter_y = (v - center_y) * depth * constant_y;
+        *iter_z = depth_image_proc::DepthTraits<T>::toMeters(depth);
+      }
+      // Fill in color
+      *iter_a = 255;
+      *iter_r = rgb[red_offset];
+      *iter_g = rgb[green_offset];
+      *iter_b = rgb[blue_offset];
     }
   }
 

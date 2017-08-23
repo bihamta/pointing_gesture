@@ -1,8 +1,0 @@
-include/hands_3d/reconstruct.h
-launch/reconstructor.launch
-msg/Detection.msg
-msg/ImageDetections.msg
-src/'
-src/reconstruct.cpp
-CMakeLists.txt
-package.xml

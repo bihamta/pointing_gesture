@@ -10,12 +10,14 @@ project(hands_3d)
 find_package(catkin REQUIRED COMPONENTS
   depth_image_proc
   roscpp
-  yolo2
   cv_bridge
   sensor_msgs
   image_transport
   message_filters
   image_geometry
+  pointignGes
+  pcl_ros
+  geometry_msgs
 )
 
 find_package(OpenCV REQUIRED)

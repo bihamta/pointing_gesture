@@ -29,6 +29,10 @@
 #include <pcl/conversions.h>
 #include <pcl_ros/transforms.h>
 #include <pcl/filters/median_filter.h>
+#include <tf/transform_datatypes.h>
+#include <math.h>
+#define PI 3.14159265
+
 using namespace message_filters::sync_policies;
 using namespace cv;
 static const std::string OPENCV_WINDOW = "Image window";
@@ -37,8 +41,10 @@ struct myPoint{
  double x;
  double y;
 };
-std::vector<float> hands_points;
-std::vector<float> face_points;
+std::vector<float> hands_points_X;
+std::vector<float> hands_points_Y;
+std::vector<float> hands_points_Z;
+std::vector<float> closest;
 void ave_method(const PointCloud::Ptr &cloud_ave);
 class Reconstruct
 {
@@ -68,12 +74,18 @@ protected:
   ros::Publisher pub_pose_right_hand;
   ros::Publisher pub_pose_face;
   ros::Publisher pub_arrow_ave;
+  ros::Publisher pub_arrow_med;
   ros::Publisher pub_arrow_furthest;
+  ros::Publisher pub_arrow_closest;
+  ros::Publisher pub_point_med;
+  ros::Publisher pub_point_ave;
 
   image_geometry::PinholeCameraModel model_;
 
 public:
   Reconstruct(ros::NodeHandle &_nh);
+
+  float points_median(std::vector<float> &v);
 
   void imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
                const sensor_msgs::ImageConstPtr& rgb_msg,
@@ -90,7 +102,11 @@ public:
                const geometry_msgs::PointStamped::Ptr& face_ave,
                const geometry_msgs::PointStamped::Ptr& right_hand_ave,
                const geometry_msgs::PoseStamped::Ptr& arrow_ave,
-                const geometry_msgs::PoseStamped::Ptr& arrow_furthest,
+               const geometry_msgs::PoseStamped::Ptr& arrow_med,
+               const geometry_msgs::PoseStamped::Ptr& arrow_furthest,
+               const geometry_msgs::PoseStamped::Ptr& arrow_closest,
+               //const geometry_msgs::PointStamped::Ptr& point_med,
+               //const geometry_msgs::PointStamped::Ptr& point_ave,
                const pointignGes::ImageDetectionsConstPtr& detection_msg,
                int red_offset, int green_offset, int blue_offset, int color_step);
 
@@ -100,7 +116,6 @@ Reconstruct::Reconstruct(ros::NodeHandle& _nh)
     : nh(_nh),
       private_nh("~")
 {
-  ROS_INFO(":-?");
   rgb_nh_.reset( new ros::NodeHandle(nh, "rgb") );
   ros::NodeHandle depth_nh(nh, "depth_registered");
   ros::NodeHandle output_nh(nh, "3dr");
@@ -151,8 +166,18 @@ Reconstruct::Reconstruct(ros::NodeHandle& _nh)
   pub_pose_right_hand = output_nh.advertise<geometry_msgs::PointStamped>("right_hand_pose", 1);
 
   pub_arrow_ave = output_nh.advertise<geometry_msgs::PoseStamped>("arrow_ave", 1);
+  pub_arrow_med = output_nh.advertise<geometry_msgs::PoseStamped>("arrow_med", 1);
   pub_arrow_furthest = output_nh.advertise<geometry_msgs::PoseStamped>("arrow_furthest", 1);
+  pub_arrow_closest = output_nh.advertise<geometry_msgs::PoseStamped>("arrow_closest", 1);
 
+}
+
+float Reconstruct::points_median(std::vector<float> &v)
+{
+    size_t n = v.size() / 2;
+    nth_element(v.begin(), v.begin()+n, v.end());
+//    ROS_INFO("v: %f", v[n]);
+    return v[n];
 }
 
 void Reconstruct::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
@@ -263,8 +288,14 @@ void Reconstruct::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
   geometry_msgs::PoseStamped::Ptr arrow_ave (new geometry_msgs::PoseStamped);
   arrow_ave->header = depth_msg->header;
 
+  geometry_msgs::PoseStamped::Ptr arrow_med (new geometry_msgs::PoseStamped);
+  arrow_med->header = depth_msg->header;
+
   geometry_msgs::PoseStamped::Ptr arrow_furthest (new geometry_msgs::PoseStamped);
   arrow_furthest->header = depth_msg->header;
+
+  geometry_msgs::PoseStamped::Ptr arrow_closest (new geometry_msgs::PoseStamped);
+  arrow_closest->header = depth_msg->header;
 
   // Allocate new point cloud message
   PointCloud::Ptr cloud_msg (new PointCloud);
@@ -309,11 +340,11 @@ void Reconstruct::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
   bool success = false;
   if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1)
   {
-    success = convert<uint16_t>(depth_msg, rgb_msg, cloud_msg, cloud_lh, cloud_rh, cloud_f, face_ave, right_hand_ave, arrow_ave, arrow_furthest, detection_msg, red_offset, green_offset, blue_offset, color_step);
+    success = convert<uint16_t>(depth_msg, rgb_msg, cloud_msg, cloud_lh, cloud_rh, cloud_f, face_ave, right_hand_ave, arrow_ave, arrow_med, arrow_furthest, arrow_closest, detection_msg, red_offset, green_offset, blue_offset, color_step);
   }
   else if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_32FC1)
   {
-    success = convert<float>(depth_msg, rgb_msg, cloud_msg, cloud_lh, cloud_rh, cloud_f, face_ave, right_hand_ave, arrow_ave, arrow_furthest, detection_msg, red_offset, green_offset, blue_offset, color_step);
+    success = convert<float>(depth_msg, rgb_msg, cloud_msg, cloud_lh, cloud_rh, cloud_f, face_ave, right_hand_ave, arrow_ave, arrow_med, arrow_furthest, arrow_closest, detection_msg, red_offset, green_offset, blue_offset, color_step);
   }
   else
   {
@@ -328,7 +359,9 @@ void Reconstruct::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
   pub_pose_face.publish( face_ave );
   pub_pose_right_hand.publish( right_hand_ave );
   pub_arrow_ave.publish(arrow_ave);
+  pub_arrow_med.publish(arrow_med);
   pub_arrow_furthest.publish(arrow_furthest);
+  pub_arrow_closest.publish(arrow_closest);
 
   if (!success)
   {
@@ -346,7 +379,9 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
                                       const geometry_msgs::PointStamped::Ptr& face_ave,
                                       const geometry_msgs::PointStamped::Ptr& right_hand_ave,
                                       const geometry_msgs::PoseStamped::Ptr& arrow_ave,
+                                      const geometry_msgs::PoseStamped::Ptr& arrow_med,
                                       const geometry_msgs::PoseStamped::Ptr& arrow_furthest,
+                                      const geometry_msgs::PoseStamped::Ptr& arrow_closest,
                                       const pointignGes::ImageDetectionsConstPtr& detection_msg,
                                       int red_offset, int green_offset, int blue_offset, int color_step)
 {
@@ -394,7 +429,13 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
   float furthest_x, furthest_y, furthest_z;
   int depth_height = int(depth_msg->height);
   int depth_width = int(depth_msg->width);
-  int h ;
+  double roll_closest, pitch_closest, yaw_closest;
+  double roll_med, pitch_med, yaw_med;
+  double roll_ave, pitch_ave, yaw_ave;
+  double pointing_hand_X, pointing_hand_Y, pointing_hand_Z;
+  hands_points_X.clear();
+  hands_points_Y.clear();
+  hands_points_Z.clear();
 
   for (int v = 0; v < depth_height; ++v, depth_row += row_step, rgb += rgb_skip)
   {
@@ -411,6 +452,8 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
         {
           in_bb = true;
           _class_id = i;
+
+
 
           if( _class_id == 1 && depth_image_proc::DepthTraits<T>::valid(depth) )
           {
@@ -431,19 +474,28 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
               ++iter_z_lh;
               ++iter_y_lh;
               ++iter_x_lh;
-
           }
           else if( _class_id == 2 && depth_image_proc::DepthTraits<T>::valid(depth) )
           {
               *iter_x_rh = (u - center_x) * depth * constant_x;
               *iter_y_rh = (v - center_y) * depth * constant_y;
               *iter_z_rh = depth_image_proc::DepthTraits<T>::toMeters(depth);
+
+//              hands_points_X.push_back(*iter_x_rh);
+//              hands_points_Y.push_back(*iter_y_rh);
+//              hands_points_Z.push_back(*iter_z_rh);
+
+//              sumX_rh += *iter_x_rh;
+//              sumY_rh += *iter_y_rh;
+//              sumZ_rh += *iter_z_rh;
+
+//              num_right_hand++;
+
               if ( v == (detection_msg.get()->detections[i].roi.y_offset+(detection_msg.get()->detections[i].roi.height/2)))
               {
                   furthest_x = *iter_x_rh;
                   furthest_y = *iter_y_rh;
                   furthest_z = *iter_z_rh;
-                  ROS_INFO("%f, %f, %f", furthest_x, furthest_y, furthest_z);
               }
 
               if((u - (detection_msg.get()->detections[i].roi.x_offset+detection_msg.get()->detections[i].roi.width/2) < ((detection_msg.get()->detections[i].roi.width)*0.5)/2)
@@ -455,6 +507,11 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
                 sumZ_rh += *iter_z_rh;
 
                 num_right_hand++;
+
+                hands_points_X.push_back(*iter_x_rh);
+                hands_points_Y.push_back(*iter_y_rh);
+                hands_points_Z.push_back(*iter_z_rh);
+
               }
 
               ++iter_z_rh;
@@ -512,6 +569,14 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
   if(!all_points) return false;
 
   depth_row = reinterpret_cast<const T*>(&depth_msg->data[0]);
+  float min = hands_points_Z.at(0);
+  int index_closest = 0;
+  for ( int j = 0; j < hands_points_Z.size(); j++){
+      if (hands_points_Z.at(j) < min){
+              min = hands_points_Z.at(j);
+              index_closest = j;
+      }
+  }
 
   sumX_f = sumX_f/num_face;
   sumY_f = sumY_f/num_face;
@@ -525,49 +590,124 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
   sumY_lh = sumY_lh/num_left_hand;
   sumZ_lh = sumZ_lh/num_left_hand;
 
-  face_ave->point.x = sumX_f;
-  face_ave->point.y = sumY_f;
-  face_ave->point.z = sumZ_f;
 
-  right_hand_ave->point.x = sumX_rh;
-  right_hand_ave->point.y = sumY_rh;
-  right_hand_ave->point.z = sumZ_rh;
+  if (sumY_lh < sumY_rh){
+    pointing_hand_X = sumX_lh;
+    pointing_hand_Y = sumY_lh;
+    pointing_hand_Z = sumZ_lh;
+  }
+  else{
+    pointing_hand_X = sumX_rh;
+    pointing_hand_Y = sumY_rh;
+    pointing_hand_Z = sumZ_rh;
+  }
+
+  face_ave->point.x = pointing_hand_X;
+  face_ave->point.y = pointing_hand_Y;
+  face_ave->point.z = pointing_hand_Z;
+
+  right_hand_ave->point.x = hands_points_X.at(index_closest);
+  right_hand_ave->point.y = hands_points_Y.at(index_closest);
+  right_hand_ave->point.z = min;
+
+//  roll_ave = atan2((sumZ_rh - sumZ_f) , (sumY_rh - sumY_f));
+//  pitch_ave = atan2((sumZ_rh - sumZ_f) ,( sumX_rh - sumX_f));
+//  yaw_ave = atan2((sumX_rh - sumX_f) , (sumY_rh - sumY_f));
+
+
+  roll_ave = 0;
+  pitch_ave = atan2((pointing_hand_X - sumX_f), (pointing_hand_Z - sumZ_f)) - PI/2;
+  yaw_ave = 0;
+
+  tf::Quaternion arrow_angle_ave = tf::createQuaternionFromRPY(roll_ave , pitch_ave, yaw_ave);
 
   arrow_ave->pose.position.x = sumX_f;
   arrow_ave->pose.position.y = sumY_f;
   arrow_ave->pose.position.z = sumZ_f;
-  arrow_ave->pose.orientation.x = sumX_rh;
-  arrow_ave->pose.orientation.y = sumY_rh;
-  arrow_ave->pose.orientation.z = sumZ_rh;
-  arrow_ave->pose.orientation.w = 0;
-
-  arrow_furthest->pose.position.x = sumX_f;
-  arrow_furthest->pose.position.y = sumY_f;
-  arrow_furthest->pose.position.z = sumZ_f;
-  arrow_furthest->pose.orientation.x = furthest_x;
-  arrow_furthest->pose.orientation.y = furthest_y;
-  arrow_furthest->pose.orientation.z = furthest_z;
-  arrow_furthest->pose.orientation.w = 0;
+  arrow_ave->pose.orientation.x = arrow_angle_ave.getX();
+  arrow_ave->pose.orientation.y = arrow_angle_ave.getY();
+  arrow_ave->pose.orientation.z = arrow_angle_ave.getZ();
+  arrow_ave->pose.orientation.w = arrow_angle_ave.getW();
 
 
-//ROS_INFO("Av: %f",av);
+    roll_closest = 0;
+    pitch_closest = atan2((hands_points_X.at(index_closest) - sumX_f), ( min - sumZ_f)) - PI/2;
+//  pitch_closest =  atan2(( min - sumZ_f), (hands_points_X.at(index_closest) - sumX_f));
+//  yaw_closest = atan2((hands_points_X.at(index_closest) - sumX_f), (hands_points_Y.at(index_closest) - sumY_f));
+    yaw_closest = 0;
+
+  tf::Quaternion arrow_angle_closest = tf::createQuaternionFromRPY(roll_closest , pitch_closest, yaw_closest);
+
+  arrow_closest->pose.position.x = sumX_f;
+  arrow_closest->pose.position.y = sumY_f;
+  arrow_closest->pose.position.z = sumZ_f;
+  arrow_closest->pose.orientation.x = arrow_angle_closest.getX();
+  arrow_closest->pose.orientation.y = arrow_angle_closest.getY();
+  arrow_closest->pose.orientation.z = arrow_angle_closest.getZ();
+  arrow_closest->pose.orientation.w = arrow_angle_closest.getW();
+
+  double dX = points_median(hands_points_X) - sumX_f ;
+  double dY = points_median(hands_points_Y) - sumY_f ;
+  double dZ = points_median(hands_points_Z) - sumZ_f;
+
+  ROS_INFO ("dx %f, dy %f ,dz %f", dX, dY, dZ);
+//  roll_med = atan2(dZ , dY);
+  roll_med = 0;
+  pitch_med = atan2(dX, dZ) - PI/2;
+  yaw_med =0;
+//  roll_med = 0;
+//  pitch_med = 1 + PI;
+//  yaw_med = 0;
+  //ROS_INFO ("%f, %f ,%f", roll_med, pitch_med, yaw_med);
+
+  tf::Quaternion arrow_angle_med = tf::createQuaternionFromRPY(roll_med, pitch_med, yaw_med);
+
+  arrow_med->pose.position.x = sumX_f;
+  arrow_med->pose.position.y = sumY_f;
+  arrow_med->pose.position.z = sumZ_f;
+  arrow_med->pose.orientation.x = arrow_angle_med.getX();
+  arrow_med->pose.orientation.y = arrow_angle_med.getY();
+  arrow_med->pose.orientation.z = arrow_angle_med.getZ();
+  arrow_med->pose.orientation.w = arrow_angle_med.getW();
+
+  ROS_INFO ("%f, %f ,%f, %f", arrow_angle_med.getX(), arrow_angle_med.getY(), arrow_angle_med.getZ(),arrow_angle_med.getW());
+
+
+//    arrow_closest->pose.position.x = sumX_f;
+//    arrow_closest->pose.position.y = sumY_f;
+//    arrow_closest->pose.position.z = sumZ_f;
+//    arrow_closest->pose.orientation.x = hands_points_X.at(index_closest);
+//    arrow_closest->pose.orientation.y = hands_points_Y.at(index_closest);
+//    arrow_closest->pose.orientation.z = min;
+//    arrow_closest->pose.orientation.w = 0;
+
+//    arrow_furthest->pose.position.x = sumX_f;
+//    arrow_furthest->pose.position.y = sumY_f;
+//    arrow_furthest->pose.position.z = sumZ_f;
+//    arrow_furthest->pose.orientation.x = furthest_x;
+//    arrow_furthest->pose.orientation.y = furthest_y;
+//    arrow_furthest->pose.orientation.z = furthest_z;
+//    arrow_furthest->pose.orientation.w = 0;
+
+//    arrow_ave->pose.position.x = sumX_f;
+//    arrow_ave->pose.position.y = sumY_f;
+//    arrow_ave->pose.position.z = sumZ_f;
+//    arrow_ave->pose.orientation.x = sumX_rh;
+//    arrow_ave->pose.orientation.y = sumY_rh;
+//    arrow_ave->pose.orientation.z = sumZ_rh;
+//    arrow_ave->pose.orientation.w = 0;
+
+//    arrow_med->pose.position.x = sumX_f;
+//    arrow_med->pose.position.y = sumY_f;
+//    arrow_med->pose.position.z = sumZ_f;
+//    arrow_med->pose.orientation.x = points_median(hands_points_X);
+//    arrow_med->pose.orientation.y = points_median(hands_points_Y);
+//    arrow_med->pose.orientation.z = points_median(hands_points_Z);
+//    arrow_med->pose.orientation.w = 0;
+
+
+
   return true;
-}
-
-
-
-
-void ave_method(const PointCloud::Ptr& cloud_ave)
-{
-    sensor_msgs::PointCloud2Iterator<float> iter_x(*cloud_ave, "x");
-    sensor_msgs::PointCloud2Iterator<float> iter_y(*cloud_ave, "y");
-    sensor_msgs::PointCloud2Iterator<float> iter_z(*cloud_ave, "z");
-
-    for (int v = 0; v < int(cloud_ave->height); ++v)
-        for (int u = 0; u < int(cloud_ave->width); ++u, ++iter_x, ++iter_y, ++iter_z)
-        {
-            ROS_INFO("iter_x %f", *iter_x);
-        }
 }
 
 

@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/core/core.hpp>
-#include <pointignGes/ImageDetections.h>
+#include <yolo2/ImageDetections.h>
 #include <pcl/PCLPointCloud2.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_types.h>
@@ -58,9 +58,9 @@ protected:
   // Subs
   image_transport::SubscriberFilter sub_depth_, sub_rgb_;
   message_filters::Subscriber<sensor_msgs::CameraInfo> sub_info_;
-  message_filters::Subscriber<pointignGes::ImageDetections> sub_objects_;
-  typedef ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, pointignGes::ImageDetections> SyncPolicy;
-  typedef ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, pointignGes::ImageDetections> ExactSyncPolicy;
+  message_filters::Subscriber<yolo2::ImageDetections> sub_objects_;
+  typedef ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, yolo2::ImageDetections> SyncPolicy;
+  typedef ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, yolo2::ImageDetections> ExactSyncPolicy;
   typedef message_filters::Synchronizer<SyncPolicy> Synchronizer;
   typedef message_filters::Synchronizer<ExactSyncPolicy> ExactSynchronizer;
   boost::shared_ptr<Synchronizer> sync_;
@@ -90,7 +90,7 @@ public:
   void imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
                const sensor_msgs::ImageConstPtr& rgb_msg,
                const sensor_msgs::CameraInfoConstPtr& info_msg,
-               const pointignGes::ImageDetectionsConstPtr &detection_msg);
+               const yolo2::ImageDetectionsConstPtr &detection_msg);
 
   template<typename T>
   bool convert(const sensor_msgs::ImageConstPtr& depth_msg,
@@ -107,7 +107,7 @@ public:
                const geometry_msgs::PoseStamped::Ptr& arrow_closest,
                //const geometry_msgs::PointStamped::Ptr& point_med,
                //const geometry_msgs::PointStamped::Ptr& point_ave,
-               const pointignGes::ImageDetectionsConstPtr& detection_msg,
+               const yolo2::ImageDetectionsConstPtr& detection_msg,
                int red_offset, int green_offset, int blue_offset, int color_step);
 
 };
@@ -183,7 +183,7 @@ float Reconstruct::points_median(std::vector<float> &v)
 void Reconstruct::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
                                       const sensor_msgs::ImageConstPtr& rgb_msg_in,
                                       const sensor_msgs::CameraInfoConstPtr& info_msg,
-                                      const pointignGes::ImageDetectionsConstPtr& detection_msg)
+                                      const yolo2::ImageDetectionsConstPtr& detection_msg)
 {
   // Check for bad inputs
   if (depth_msg->header.frame_id != rgb_msg_in->header.frame_id)
@@ -382,7 +382,7 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
                                       const geometry_msgs::PoseStamped::Ptr& arrow_med,
                                       const geometry_msgs::PoseStamped::Ptr& arrow_furthest,
                                       const geometry_msgs::PoseStamped::Ptr& arrow_closest,
-                                      const pointignGes::ImageDetectionsConstPtr& detection_msg,
+                                      const yolo2::ImageDetectionsConstPtr& detection_msg,
                                       int red_offset, int green_offset, int blue_offset, int color_step)
 {
   // Use correct principal point from calibration

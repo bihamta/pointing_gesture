@@ -15,7 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   message_filters
   image_geometry
-  pointignGes
+  yolo2
   pcl_ros
   geometry_msgs
 )

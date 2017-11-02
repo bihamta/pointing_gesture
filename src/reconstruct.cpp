@@ -35,6 +35,7 @@
 
 using namespace message_filters::sync_policies;
 using namespace cv;
+
 static const std::string OPENCV_WINDOW = "Image window";
 typedef sensor_msgs::PointCloud2 PointCloud;
 struct myPoint{
@@ -443,8 +444,11 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
   hands_points_left_X.clear();
   hands_points_left_Y.clear();
   hands_points_left_Z.clear();
-  int v_old = 0, u_old = 0;
-
+  int v_old, u_old;
+  int _pointing_hand_i = -1;
+  /*
+  u_old = detection_msg.get()->detections[0].roi.x_offset;
+  v_old = detection_msg.get()->detections[0].roi.y_offset;*/
   for (int v = 0; v < depth_height; ++v, depth_row += row_step, rgb += rgb_skip)
   {
     for (int u = 0; u < depth_width; ++u, rgb += color_step, ++iter_x, ++iter_y, ++iter_z, ++iter_a, ++iter_r, ++iter_g, ++iter_b)
@@ -460,41 +464,15 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
         {
           in_bb = true;
           _class_id = detection_msg.get()->detections[i].class_id;
+//          ROS_INFO("U and V %d , %d, ---->", u, v, i);
 
-          if( _class_id == 0 && depth_image_proc::DepthTraits<T>::valid(depth) && pointingFlag )
+          if( _class_id == 0 && depth_image_proc::DepthTraits<T>::valid(depth)  )
           {
-                  *iter_x_lh = (u - center_x) * depth * constant_x;
-                  *iter_y_lh = (v - center_y) * depth * constant_y;
-                  *iter_z_lh = depth_image_proc::DepthTraits<T>::toMeters(depth);
-
-                  if((u - (detection_msg.get()->detections[i].roi.x_offset+detection_msg.get()->detections[i].roi.width/2) < ((detection_msg.get()->detections[i].roi.width)*0.5)/2)
-                          && (v - (detection_msg.get()->detections[i].roi.y_offset+detection_msg.get()->detections[i].roi.height/2) < ((detection_msg.get()->detections[i].roi.height)*0.5)/2)
-                          )
-                  {
-                    sumX_lh += *iter_x_lh;
-                    sumY_lh += *iter_y_lh;
-                    sumZ_lh += *iter_z_lh;
-
-                    num_left_hand++;
-
-                    hands_points_left_X.push_back(*iter_x_lh);
-                    hands_points_left_Y.push_back(*iter_y_lh);
-                    hands_points_left_Z.push_back(*iter_z_lh);
-                  }
-                  ++iter_z_lh;
-                  ++iter_y_lh;
-                  ++iter_x_lh;
-                  if(u_old + 1 == u && v_old + 1 == v)
-                  {
-                      u_old = u;
-                      v_old = v;
-                  }
-                  else
-                  {
-                      pointingFlag = false;
-                  }
-          }else if( _class_id == 0 && depth_image_proc::DepthTraits<T>::valid(depth) && !pointingFlag )
-                  {
+                if( _pointing_hand_i == -1)
+                {
+                    _pointing_hand_i = i;
+                }
+                if(_pointing_hand_i == i){
                   *iter_x_rh = (u - center_x) * depth * constant_x;
                   *iter_y_rh = (v - center_y) * depth * constant_y;
                   *iter_z_rh = depth_image_proc::DepthTraits<T>::toMeters(depth);
@@ -525,18 +503,30 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
                   ++iter_z_rh;
                   ++iter_y_rh;
                   ++iter_x_rh;
+              } else {
+                    *iter_x_lh = (u - center_x) * depth * constant_x;
+                    *iter_y_lh = (v - center_y) * depth * constant_y;
+                    *iter_z_lh = depth_image_proc::DepthTraits<T>::toMeters(depth);
 
-                  if(u_old + 1 == u && v_old + 1 == v)
-                  {
-                      u_old = u;
-                      v_old = v;
-                  }
-                  else
-                  {
-                      pointingFlag = true;
-                  }
+                    if((u - (detection_msg.get()->detections[i].roi.x_offset+detection_msg.get()->detections[i].roi.width/2) < ((detection_msg.get()->detections[i].roi.width)*0.5)/2)
+                            && (v - (detection_msg.get()->detections[i].roi.y_offset+detection_msg.get()->detections[i].roi.height/2) < ((detection_msg.get()->detections[i].roi.height)*0.5)/2)
+                            )
+                    {
+                      sumX_lh += *iter_x_lh;
+                      sumY_lh += *iter_y_lh;
+                      sumZ_lh += *iter_z_lh;
+
+                      num_left_hand++;
+
+                      hands_points_left_X.push_back(*iter_x_lh);
+                      hands_points_left_Y.push_back(*iter_y_lh);
+                      hands_points_left_Z.push_back(*iter_z_lh);
+                    }
+                    ++iter_z_lh;
+                    ++iter_y_lh;
+                    ++iter_x_lh;
               }
-          else if ( _class_id == 1 && depth_image_proc::DepthTraits<T>::valid(depth) )
+          } else if ( _class_id == 1 && depth_image_proc::DepthTraits<T>::valid(depth) )
           {
               *iter_x_f = (u - center_x) * depth * constant_x;
               *iter_y_f = (v - center_y) * depth * constant_y;
@@ -656,6 +646,10 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
   right_hand_ave->point.z = pointing_hand_Z;
 
 
+//    right_hand_ave->point.x = points_median(hands_points_right_X);
+//    right_hand_ave->point.y = points_median(hands_points_right_Y);
+//    right_hand_ave->point.z = points_median(hands_points_right_Z);
+
 //  face_ave->point.x = sumX_f;
 //  face_ave->point.y = sumY_f;
 //  face_ave->point.z = sumZ_f;
@@ -666,7 +660,9 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 
   roll_ave = 0;
   pitch_ave = atan2((pointing_hand_X - sumX_f), (pointing_hand_Z - sumZ_f)) - PI/2;
-  yaw_ave = 0;
+  // yaw_ave = -atan2(sqrt(pow(pointing_hand_Z - sumZ_f, 2) + pow(pointing_hand_X - sumX_f, 2)), pointing_hand_Y - sumY_f) + PI/2; // -atan2(fabs(pointing_hand_X - sumX_f), (pointing_hand_Y - sumY_f)) + PI/2;
+  int sign = (pointing_hand_X > sumX_f) ? -1 : 1;
+  yaw_ave = sign * (atan2(sqrt(pow(pointing_hand_Z - sumZ_f, 2) + pow(pointing_hand_X - sumX_f, 2)), pointing_hand_Y - sumY_f) - PI/2); // -atan2(fabs(pointing_hand_X - sumX_f), (pointing_hand_Y - sumY_f)) + PI/2;
 
   tf::Quaternion arrow_angle_ave = tf::createQuaternionFromRPY(roll_ave , pitch_ave, yaw_ave);
 
@@ -720,7 +716,7 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 //      right_hand_ave->point.z = points_median(hands_points_left_Z);
   }
   if (dX != 0)
-    ROS_INFO ("dx %f, dy %f ,dz %f", dX, dY, dZ);
+//    ROS_INFO ("dx %f, dy %f ,dz %f", dX, dY, dZ);
   roll_med = 0;
   pitch_med = atan2(dX, dZ) - PI/2;
   yaw_med =0;

@@ -33,11 +33,16 @@
 #include <pcl/filters/median_filter.h>
 #include <tf/transform_datatypes.h>
 #include <math.h>
+#include "hands_3d/point3.h"
+#include "hands_3d/dbscan.h"
+
 #define PI 3.14159265
 
 using namespace message_filters::sync_policies;
 using namespace cv;
 typedef sensor_msgs::PointCloud2 PointCloud;
+
+class DBSCAN;
 
 class PointingGesture
 {
@@ -59,6 +64,17 @@ class PointingGesture
 				const yolo2::ImageDetectionsConstPtr& detection_msg,
 				int red_offset, int green_offset, int blue_offset, int color_step);
 
+		Point3* points_median(std::vector<Point3*> &v);
+
+		bool calculatePointingGesture(
+				const PointCloud::Ptr& cloud_f,
+				const PointCloud::Ptr& cloud_1h,
+				const PointCloud::Ptr& cloud_2h,
+				const geometry_msgs::PointStamped::Ptr& face_ave,
+				const geometry_msgs::PointStamped::Ptr& right_hand_ave,
+				const geometry_msgs::PoseStamped::Ptr& arrow_ave,
+				const geometry_msgs::PoseStamped::Ptr& arrow_med,
+				const geometry_msgs::PoseStamped::Ptr& arrow_closest);
 
 	protected:
 		ros::NodeHandle nh;
@@ -93,4 +109,6 @@ class PointingGesture
 		ros::Publisher pub_point_ave;
 
 		image_geometry::PinholeCameraModel model_;
+
+		DBSCAN* dbscan;
 };

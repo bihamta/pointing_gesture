@@ -154,7 +154,8 @@ include_directories(
 
 add_executable(reconstruct
 	src/main.cpp
-	src/pointing_gesture.cpp)
+	src/pointing_gesture.cpp
+	src/dbscan.cpp)
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -170,6 +171,8 @@ target_link_libraries(reconstruct
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )
+
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -std=c++11 -march=native" )
 
 #############
 ## Install ##

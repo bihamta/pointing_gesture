@@ -64,9 +64,9 @@ class PointingGesture
 		bool convert(const sensor_msgs::ImageConstPtr& depth_msg,
 				const sensor_msgs::ImageConstPtr& rgb_msg,
 				const PointCloud::Ptr& cloud_msg,
-				const PointCloud::Ptr& cloud_1h,
-				const PointCloud::Ptr& cloud_2h,
-				const PointCloud::Ptr& cloud_f,
+				PointCloud::Ptr& cloud_1h,
+				PointCloud::Ptr& cloud_2h,
+				PointCloud::Ptr& cloud_f,
 				const yolo2::ImageDetectionsConstPtr& detection_msg,
 				int red_offset, int green_offset, int blue_offset, int color_step);
 

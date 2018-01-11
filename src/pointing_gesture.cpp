@@ -480,13 +480,14 @@ template<typename T>
 bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 		const sensor_msgs::ImageConstPtr& rgb_msg,
 		const PointCloud::Ptr& cloud_msg,
-		const PointCloud::Ptr& cloud_1h,
-		const PointCloud::Ptr& cloud_2h,
-		const PointCloud::Ptr& cloud_f,
+		PointCloud::Ptr& cloud_1h,
+		PointCloud::Ptr& cloud_2h,
+		PointCloud::Ptr& cloud_f,
 		const yolo2::ImageDetectionsConstPtr& detection_msg,
 		int red_offset, int green_offset, int blue_offset, int color_step)
 {
-	bool hand_found = false;
+	bool first_hand_found = false;
+	bool second_hand_found = false;
 	bool face_found = false;
 
 	// Use correct principal point from calibration
@@ -504,6 +505,12 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 	const uint8_t* rgb = &rgb_msg->data[0];
 	int rgb_skip = rgb_msg->step - rgb_msg->width * color_step;
 	int _class_id = 0;
+	double cloud_f_width = 0;
+	double cloud_f_height = 0;
+	double cloud_1h_width = 0;
+	double cloud_1h_height = 0;
+	double cloud_2h_width = 0;
+	double cloud_2h_height = 0;
 
 	sensor_msgs::PointCloud2Iterator<float> iter_x(*cloud_msg, "x");
 	sensor_msgs::PointCloud2Iterator<float> iter_y(*cloud_msg, "y");
@@ -543,7 +550,7 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 				{
 					in_bb = true;
 					_class_id = detection_msg.get()->detections[i].class_id;
-					//          ROS_INFO("U and V %d , %d, ---->", u, v, i);
+					          //ROS_INFO("U and V %d , %d, ---->", u, v);
 
 					if( _class_id == 0 && depth_image_proc::DepthTraits<T>::valid(depth)  )
 					{
@@ -552,8 +559,17 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 							_pointing_hand_ave_i = i;
 						}
 						if(_pointing_hand_ave_i == i){
-							cloud_1h->width = detection_msg.get()->detections[i].roi.width;
-							cloud_1h->height = detection_msg.get()->detections[i].roi.height;
+							if (! first_hand_found) {
+								cloud_1h_width = detection_msg.get()->detections[i].roi.width;
+								cloud_1h_height = detection_msg.get()->detections[i].roi.height;
+								cloud_1h->width = cloud_1h_width;
+								cloud_1h->height = cloud_1h_height;
+								iter_x_1h = sensor_msgs::PointCloud2Iterator<float>(*cloud_1h, "x");
+								iter_y_1h = sensor_msgs::PointCloud2Iterator<float>(*cloud_1h, "y");
+								iter_z_1h = sensor_msgs::PointCloud2Iterator<float>(*cloud_1h, "z");
+
+								first_hand_found = true;
+							}
 							*iter_x_1h = (u - center_x) * depth * constant_x;
 							*iter_y_1h = (v - center_y) * depth * constant_y;
 							*iter_z_1h = depth_image_proc::DepthTraits<T>::toMeters(depth);
@@ -562,8 +578,20 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 							++iter_y_1h;
 							++iter_x_1h;
 						} else {
-							cloud_2h->width = detection_msg.get()->detections[i].roi.width;
-							cloud_2h->height = detection_msg.get()->detections[i].roi.height;
+							if (! second_hand_found) {
+								cloud_2h_width = detection_msg.get()->detections[i].roi.width;
+								cloud_2h_height = detection_msg.get()->detections[i].roi.height;
+								cloud_2h->width = cloud_2h_width;
+								cloud_2h->height = cloud_2h_height;
+								iter_x_2h = sensor_msgs::PointCloud2Iterator<float>(*cloud_2h, "x");
+								iter_y_2h = sensor_msgs::PointCloud2Iterator<float>(*cloud_2h, "y");
+								iter_z_2h = sensor_msgs::PointCloud2Iterator<float>(*cloud_2h, "z");
+
+								second_hand_found = true;
+							}
+
+							cloud_2h_width = detection_msg.get()->detections[i].roi.width;
+							cloud_2h_height = detection_msg.get()->detections[i].roi.height;
 
 							*iter_x_2h = (u - center_x) * depth * constant_x;
 							*iter_y_2h = (v - center_y) * depth * constant_y;
@@ -572,23 +600,31 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 							++iter_z_2h;
 							++iter_y_2h;
 							++iter_x_2h;
-
-							hand_found = true;
 						}
 					} else if ( _class_id == 1 && depth_image_proc::DepthTraits<T>::valid(depth) )
 					{
-						cloud_f->width = detection_msg.get()->detections[i].roi.width;
-						cloud_f->height = detection_msg.get()->detections[i].roi.height;
+						if (! face_found) {
+							cloud_f_width = detection_msg.get()->detections[i].roi.width;
+							cloud_f_height = detection_msg.get()->detections[i].roi.height;
+							cloud_f->width = cloud_f_width;
+							cloud_f->height = cloud_f_height;
+							iter_x_f = sensor_msgs::PointCloud2Iterator<float>(*cloud_f, "x");
+							iter_y_f = sensor_msgs::PointCloud2Iterator<float>(*cloud_f, "y");
+							iter_z_f = sensor_msgs::PointCloud2Iterator<float>(*cloud_f, "z");
+
+							face_found = true;
+						}
+
+						cloud_f_width = detection_msg.get()->detections[i].roi.width;
+						cloud_f_height = detection_msg.get()->detections[i].roi.height;
 
 						*iter_x_f = (u - center_x) * depth * constant_x;
 						*iter_y_f = (v - center_y) * depth * constant_y;
 						*iter_z_f = depth_image_proc::DepthTraits<T>::toMeters(depth);
-						ROS_INFO("%f", *iter_x_f);
+					//	ROS_INFO("%f", *iter_x_f);
 						++iter_z_f;
 						++iter_y_f;
 						++iter_x_f;
-
-						face_found = true;
 					}
 
 					break;
@@ -615,7 +651,16 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 		}
 	}
 
-	if (!hand_found || !face_found) return false;
+//	cloud_f->width = cloud_f_width; cloud_f->height = cloud_f_height;
+//	cloud_1h->width = cloud_1h_width; cloud_1h->height = cloud_1h_height;
+//	cloud_2h->width = cloud_2h_width; cloud_2h->height = cloud_2h_height;
+
+	if (!second_hand_found) {
+		cloud_2h->width= 0;
+		cloud_2h->height= 0;
+	}
+
+	if (!first_hand_found || !face_found) return false;
 
 	if(!all_points) return false;
 

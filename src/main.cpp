@@ -3,7 +3,7 @@
 
 int main(int argc, char* argv[])
 {
-    ros::init(argc, argv, "reconstruct");
+    ros::init(argc, argv, "pointing_gesture");
     ROS_INFO_STREAM("Reconstructor Initaited");
     ros::NodeHandle nh;
     ros::NodeHandle pnh("~");

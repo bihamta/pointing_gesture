@@ -1,5 +1,7 @@
 #include <hands_3d/pointing_gesture.h>
 
+#define MIN_POINTS 20
+#define EPSILON 0.0001 
 PointingGesture::PointingGesture(ros::NodeHandle& _nh, ros::NodeHandle& _pnh) : nh(_nh), pnh(_pnh)
 {
 	dbscan = new DBSCAN;
@@ -21,6 +23,7 @@ PointingGesture::PointingGesture(ros::NodeHandle& _nh, ros::NodeHandle& _pnh) : 
 	}
 */
 
+	imageReceived = false;
 	rgb_nh_.reset(new ros::NodeHandle(nh, "rgb") );
 	ros::NodeHandle depth_nh(nh, "depth_registered");
 	ros::NodeHandle output_nh(nh, "3dr");
@@ -37,13 +40,13 @@ PointingGesture::PointingGesture(ros::NodeHandle& _nh, ros::NodeHandle& _pnh) : 
 	// Synchronize inputs. Topic subscriptions happen on demand in the connection callback.
 	if (use_exact_sync)
 	{
-		exact_sync_.reset( new ExactSynchronizer(ExactSyncPolicy(queue_size), sub_depth_, sub_rgb_, sub_info_, sub_objects_) );
-		exact_sync_->registerCallback(boost::bind(&PointingGesture::imageCb, this, _1, _2, _3, _4));
+		exact_sync_.reset( new ExactSynchronizer(ExactSyncPolicy(queue_size), sub_depth_, sub_rgb_, sub_info_) );
+		exact_sync_->registerCallback(boost::bind(&PointingGesture::imageOnlyCb, this, _1, _2, _3));
 	}
 	else
 	{
-		sync_.reset( new Synchronizer(SyncPolicy(queue_size), sub_depth_, sub_rgb_, sub_info_, sub_objects_ ));
-		sync_->registerCallback(boost::bind(&PointingGesture::imageCb, this, _1, _2, _3, _4));
+		sync_.reset( new Synchronizer(SyncPolicy(queue_size), sub_depth_, sub_rgb_, sub_info_));
+		sync_->registerCallback(boost::bind(&PointingGesture::imageOnlyCb, this, _1, _2, _3));
 	}
 
 
@@ -53,14 +56,16 @@ PointingGesture::PointingGesture(ros::NodeHandle& _nh, ros::NodeHandle& _pnh) : 
 	// depth image can use different transport.(e.g. compressedDepth)
 	image_transport::TransportHints depth_hints("raw",ros::TransportHints(), pnh, depth_image_transport_param);
 
-	sub_depth_.subscribe(*depth_it_, "image_rect", 5, depth_hints);
+	sub_depth_.subscribe(*depth_it_, "image_rect", 1, depth_hints);
 
 	// rgb uses normal ros transport hints.
 	image_transport::TransportHints hints("raw", ros::TransportHints(), pnh);
-	sub_rgb_.subscribe(*rgb_it_, "image_rect_color", 5, hints);
-	sub_info_.subscribe(*rgb_nh_, "camera_info", 5);
+	sub_rgb_.subscribe(*rgb_it_, "image_rect_color", 1, hints);
+	sub_info_.subscribe(*rgb_nh_, "camera_info", 1);
 
-	sub_objects_.subscribe(nh, "detections", 5);
+	sub_objects_.subscribe(nh, "detections", 1);
+
+        sub_objects_only_ = nh.subscribe<yolo2::ImageDetections> ("detections", 5, &PointingGesture::detectionCb, this);
 
 	pub_point_cloud_ = output_nh.advertise<PointCloud>("points", 5);
 	pub_point_cloud_left_hand = output_nh.advertise<PointCloud>("points_left_hand", 5);
@@ -88,9 +93,9 @@ void PointingGesture::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
 				depth_msg->header.frame_id.c_str(), rgb_msg_in->header.frame_id.c_str());
 		return;
 	}
-	//No need to do the process if there is no subscriber
-	if(pub_point_cloud_.getNumSubscribers() == 0 )
-		return;
+//	//No need to do the process if there is no subscriber
+//	if(pub_point_cloud_.getNumSubscribers() == 0 )
+//		return;
 
 	// Update camera model
 	model_.fromCameraInfo(info_msg);
@@ -249,9 +254,9 @@ void PointingGesture::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
 	}
 
 	pub_point_cloud_.publish( cloud_msg );
-	pub_point_cloud_left_hand.publish( cloud_1h );
-	pub_point_cloud_right_hand.publish( cloud_2h );
-	pub_point_cloud_face.publish( cloud_f );
+//	pub_point_cloud_left_hand.publish( cloud_1h );
+//	pub_point_cloud_right_hand.publish( cloud_2h );
+//	pub_point_cloud_face.publish( cloud_f );
 //	pub_pose_face.publish( face_ave_marker );
 //	pub_pose_right_hand.publish( hand_ave_marker );
 //	pub_arrow_ave.publish(arrow_ave);
@@ -265,6 +270,212 @@ void PointingGesture::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
 	}
 }
 
+void PointingGesture::imageOnlyCb(const sensor_msgs::ImageConstPtr& depth_msg,
+		const sensor_msgs::ImageConstPtr& rgb_msg_in,
+		const sensor_msgs::CameraInfoConstPtr& info_msg)
+{
+	this->depth_msg = depth_msg;
+	this->rgb_msg_in = rgb_msg_in;
+	this->info_msg = info_msg;
+	this->imageReceived = true;
+}
+	
+void PointingGesture::detectionCb(const yolo2::ImageDetectionsConstPtr& detection_msg)
+{
+	if (! imageReceived) {
+		ROS_INFO("image has not been received yet");
+		return;
+	}
+
+	// Check for bad inputs
+	if (depth_msg->header.frame_id != rgb_msg_in->header.frame_id)
+	{
+		ROS_ERROR_THROTTLE(5, "Depth image frame id [%s] doesn't match RGB image frame id [%s]",
+				depth_msg->header.frame_id.c_str(), rgb_msg_in->header.frame_id.c_str());
+		return;
+	}
+	//No need to do the process if there is no subscriber
+//	if(pub_point_cloud_.getNumSubscribers() == 0 )
+//		return;
+
+	// Update camera model
+	model_.fromCameraInfo(info_msg);
+
+	// Check if the input image has to be resized
+	sensor_msgs::ImageConstPtr rgb_msg = rgb_msg_in;
+	if (depth_msg->width != rgb_msg->width || depth_msg->height != rgb_msg->height)
+	{
+		sensor_msgs::CameraInfo info_msg_tmp = *info_msg;
+		info_msg_tmp.width = depth_msg->width;
+		info_msg_tmp.height = depth_msg->height;
+		float ratio = float(depth_msg->width)/float(rgb_msg->width);
+		info_msg_tmp.K[0] *= ratio;
+		info_msg_tmp.K[2] *= ratio;
+		info_msg_tmp.K[4] *= ratio;
+		info_msg_tmp.K[5] *= ratio;
+		info_msg_tmp.P[0] *= ratio;
+		info_msg_tmp.P[2] *= ratio;
+		info_msg_tmp.P[5] *= ratio;
+		info_msg_tmp.P[6] *= ratio;
+		model_.fromCameraInfo(info_msg_tmp);
+
+		cv_bridge::CvImageConstPtr cv_ptr;
+		try
+		{
+			cv_ptr = cv_bridge::toCvShare(rgb_msg, rgb_msg->encoding);
+		}
+		catch (cv_bridge::Exception& e)
+		{
+			ROS_ERROR("cv_bridge exception: %s", e.what());
+			return;
+		}
+		cv_bridge::CvImage cv_rsz;
+		cv_rsz.header = cv_ptr->header;
+		cv_rsz.encoding = cv_ptr->encoding;
+		cv::resize(cv_ptr->image.rowRange(0,depth_msg->height/ratio), cv_rsz.image, cv::Size(depth_msg->width, depth_msg->height));
+		if ((rgb_msg->encoding == sensor_msgs::image_encodings::RGB8) || (rgb_msg->encoding == sensor_msgs::image_encodings::BGR8) || (rgb_msg->encoding == sensor_msgs::image_encodings::MONO8))
+			rgb_msg = cv_rsz.toImageMsg();
+		else
+			rgb_msg = cv_bridge::toCvCopy(cv_rsz.toImageMsg(), sensor_msgs::image_encodings::RGB8)->toImageMsg();
+	}
+	else
+		rgb_msg = rgb_msg_in;
+
+	// Supported color encodings: RGB8, BGR8, MONO8
+	int red_offset, green_offset, blue_offset, color_step;
+	if (rgb_msg->encoding == sensor_msgs::image_encodings::RGB8)
+	{
+		red_offset   = 0;
+		green_offset = 1;
+		blue_offset  = 2;
+		color_step   = 3;
+	}
+	else if (rgb_msg->encoding == sensor_msgs::image_encodings::BGR8)
+	{
+		red_offset   = 2;
+		green_offset = 1;
+		blue_offset  = 0;
+		color_step   = 3;
+	}
+	else if (rgb_msg->encoding == sensor_msgs::image_encodings::MONO8)
+	{
+		red_offset   = 0;
+		green_offset = 0;
+		blue_offset  = 0;
+		color_step   = 1;
+	}
+	else
+	{
+		try
+		{
+			rgb_msg = cv_bridge::toCvCopy(rgb_msg, sensor_msgs::image_encodings::RGB8)->toImageMsg();
+		}
+		catch (cv_bridge::Exception& e)
+		{
+			ROS_ERROR_THROTTLE(5, "Unsupported encoding [%s]: %s", rgb_msg->encoding.c_str(), e.what());
+			return;
+		}
+		red_offset   = 0;
+		green_offset = 1;
+		blue_offset  = 2;
+		color_step   = 3;
+	}
+	// Pose Messages
+	geometry_msgs::PointStamped::Ptr face_ave_marker (new geometry_msgs::PointStamped);
+	face_ave_marker->header = depth_msg->header;
+
+	geometry_msgs::PointStamped::Ptr hand_ave_marker (new geometry_msgs::PointStamped);
+	hand_ave_marker->header = depth_msg->header;
+
+	geometry_msgs::PoseStamped::Ptr arrow_ave (new geometry_msgs::PoseStamped);
+	arrow_ave->header = depth_msg->header;
+
+	geometry_msgs::PoseStamped::Ptr arrow_med (new geometry_msgs::PoseStamped);
+	arrow_med->header = depth_msg->header;
+
+	geometry_msgs::PoseStamped::Ptr arrow_furthest (new geometry_msgs::PoseStamped);
+	arrow_furthest->header = depth_msg->header;
+
+	geometry_msgs::PoseStamped::Ptr arrow_closest (new geometry_msgs::PoseStamped);
+	arrow_closest->header = depth_msg->header;
+
+	// Allocate new point cloud message
+	PointCloud::Ptr cloud_msg (new PointCloud);
+	cloud_msg->header = depth_msg->header;
+	cloud_msg->height = depth_msg->height;
+	cloud_msg->width  = depth_msg->width;
+	cloud_msg->is_dense = false;
+	cloud_msg->is_bigendian = false;
+
+	//PCL for different parts
+	PointCloud::Ptr cloud_2h (new PointCloud);
+	cloud_2h->header = depth_msg->header;
+	cloud_2h->height = depth_msg->height;
+	cloud_2h->width  = depth_msg->width;
+	cloud_2h->is_dense = false;
+	cloud_2h->is_bigendian = false;
+
+	PointCloud::Ptr cloud_1h (new PointCloud);
+	cloud_1h->header = depth_msg->header;
+	cloud_1h->height = depth_msg->height;
+	cloud_1h->width  = depth_msg->width;
+	cloud_1h->is_dense = false;
+	cloud_1h->is_bigendian = false;
+
+	PointCloud::Ptr cloud_f (new PointCloud);
+	cloud_f->header = depth_msg->header;
+	cloud_f->height = depth_msg->height;
+	cloud_f->width  = depth_msg->width;
+	cloud_f->is_dense = false;
+	cloud_f->is_bigendian = false;
+
+	sensor_msgs::PointCloud2Modifier pcd_modifier_all(*cloud_msg);
+	sensor_msgs::PointCloud2Modifier pcd_modifier_1h(*cloud_1h);
+	sensor_msgs::PointCloud2Modifier pcd_modifier_2h(*cloud_2h);
+	sensor_msgs::PointCloud2Modifier pcd_modifier_f(*cloud_f);
+
+	pcd_modifier_all.setPointCloud2FieldsByString(2, "xyz", "rgb");
+	pcd_modifier_1h.setPointCloud2FieldsByString(2, "xyz", "rgb");
+	pcd_modifier_2h.setPointCloud2FieldsByString(2, "xyz", "rgb");
+	pcd_modifier_f.setPointCloud2FieldsByString(2, "xyz", "rgb");
+	
+	bool success = false;
+	if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1)
+	{
+		success = convert<uint16_t>(depth_msg, rgb_msg, cloud_msg, cloud_1h, cloud_2h, cloud_f, detection_msg, red_offset, green_offset, blue_offset, color_step);
+	}
+	else if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_32FC1)
+	{
+		success = convert<float>(depth_msg, rgb_msg, cloud_msg, cloud_1h, cloud_2h, cloud_f, detection_msg, red_offset, green_offset, blue_offset, color_step);
+	}
+	else
+	{
+		ROS_ERROR_THROTTLE(5, "Depth image has unsupported encoding [%s]", depth_msg->encoding.c_str());
+		return;
+	}
+
+	if (!success)
+	{
+//		ROS_WARN_THROTTLE(1, "Reconstruction of the bounding box failed. Will not publish the object! (Bad depth?)");
+		return;
+	}
+
+	pub_point_cloud_.publish( cloud_msg );
+	pub_point_cloud_left_hand.publish( cloud_1h );
+	pub_point_cloud_right_hand.publish( cloud_2h );
+	pub_point_cloud_face.publish( cloud_f );
+
+	if (calculatePointingGesture(cloud_f, cloud_1h, cloud_2h, face_ave_marker, hand_ave_marker, arrow_ave, arrow_med, arrow_closest)) {
+		pub_pose_face.publish( face_ave_marker );
+		pub_pose_right_hand.publish( hand_ave_marker );
+		pub_arrow_ave.publish(arrow_ave);
+		pub_arrow_med.publish(arrow_med);
+		// pub_arrow_furthest.publish(arrow_furthest);
+		pub_arrow_closest.publish(arrow_closest);
+	}
+}
+
+
 template<typename T>
 bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 		const sensor_msgs::ImageConstPtr& rgb_msg,
@@ -275,6 +486,9 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 		const yolo2::ImageDetectionsConstPtr& detection_msg,
 		int red_offset, int green_offset, int blue_offset, int color_step)
 {
+	bool hand_found = false;
+	bool face_found = false;
+
 	// Use correct principal point from calibration
 	float center_x = model_.cx();
 	float center_y = model_.cy();
@@ -338,14 +552,8 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 							_pointing_hand_ave_i = i;
 						}
 						if(_pointing_hand_ave_i == i){
-							*iter_x_2h = (u - center_x) * depth * constant_x;
-							*iter_y_2h = (v - center_y) * depth * constant_y;
-							*iter_z_2h = depth_image_proc::DepthTraits<T>::toMeters(depth);
-
-							++iter_z_2h;
-							++iter_y_2h;
-							++iter_x_2h;
-						} else {
+							cloud_1h->width = detection_msg.get()->detections[i].roi.width;
+							cloud_1h->height = detection_msg.get()->detections[i].roi.height;
 							*iter_x_1h = (u - center_x) * depth * constant_x;
 							*iter_y_1h = (v - center_y) * depth * constant_y;
 							*iter_z_1h = depth_image_proc::DepthTraits<T>::toMeters(depth);
@@ -353,16 +561,34 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 							++iter_z_1h;
 							++iter_y_1h;
 							++iter_x_1h;
+						} else {
+							cloud_2h->width = detection_msg.get()->detections[i].roi.width;
+							cloud_2h->height = detection_msg.get()->detections[i].roi.height;
+
+							*iter_x_2h = (u - center_x) * depth * constant_x;
+							*iter_y_2h = (v - center_y) * depth * constant_y;
+							*iter_z_2h = depth_image_proc::DepthTraits<T>::toMeters(depth);
+
+							++iter_z_2h;
+							++iter_y_2h;
+							++iter_x_2h;
+
+							hand_found = true;
 						}
 					} else if ( _class_id == 1 && depth_image_proc::DepthTraits<T>::valid(depth) )
 					{
+						cloud_f->width = detection_msg.get()->detections[i].roi.width;
+						cloud_f->height = detection_msg.get()->detections[i].roi.height;
+
 						*iter_x_f = (u - center_x) * depth * constant_x;
 						*iter_y_f = (v - center_y) * depth * constant_y;
 						*iter_z_f = depth_image_proc::DepthTraits<T>::toMeters(depth);
-
+						ROS_INFO("%f", *iter_x_f);
 						++iter_z_f;
 						++iter_y_f;
 						++iter_x_f;
+
+						face_found = true;
 					}
 
 					break;
@@ -388,6 +614,9 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 			}
 		}
 	}
+
+	if (!hand_found || !face_found) return false;
+
 	if(!all_points) return false;
 
 	depth_row = reinterpret_cast<const T*>(&depth_msg->data[0]);
@@ -425,8 +654,16 @@ bool PointingGesture::calculatePointingGesture(
 	sensor_msgs::PointCloud2Iterator<float> iter_y_f(*cloud_f, "y");
 	sensor_msgs::PointCloud2Iterator<float> iter_z_f(*cloud_f, "z");
 
-	Point3 *sum_f, *sum_1h, *sum_2h;
+	Point3* sum_f = new Point3();
+	Point3* sum_1h = new Point3();
+	Point3* sum_2h = new Point3();
 	int num_face = 0, num_first_hand = 0, num_second_hand = 0;
+	Point3* sum_f_all = new Point3();
+	Point3* sum_1h_all = new Point3();
+	int num_face_all = 0, num_hand_all = 0;	
+	
+	std::vector<Point3*> hand_all;
+	std::vector<Point3*> face_all;
 
 	std::vector<Point3*> first_hand_points;
 	std::vector<Point3*> second_hand_points;
@@ -436,7 +673,16 @@ bool PointingGesture::calculatePointingGesture(
 	float center_y_f = cloud_f->width / 2;
 	float radius_f = (cloud_f->width < cloud_f->height) ? (cloud_f->width / 2) * 0.75 : (cloud_f->height / 2) * 0.75;
 	for (size_t i = 0; i < cloud_f->height; i++) {
-		for (size_t j = 0; j < cloud_f->width; ++j, ++iter_x_f, ++iter_y_f, ++iter_z_f) {
+		for (size_t j = 0; j < cloud_f->width && iter_x_f != iter_x_f.end(); ++j, ++iter_x_f, ++iter_y_f, ++iter_z_f) {	
+			//ROS_INFO("%f", *iter_x_f);
+			sum_f_all->x += *iter_x_f;
+			sum_f_all->y += *iter_y_f;
+			sum_f_all->z += *iter_z_f;
+			
+			num_face_all++;
+
+			face_all.push_back(new Point3(*iter_x_f, *iter_y_f, *iter_z_f));
+			
 			if (fabs(i - center_x_f) < radius_f && fabs(j - center_y_f) < radius_f) {
 				sum_f->x += *iter_x_f;
 				sum_f->y += *iter_y_f;
@@ -453,7 +699,15 @@ bool PointingGesture::calculatePointingGesture(
 	float center_y_1h = cloud_1h->width / 2;
 	float radius_1h = (cloud_1h->width < cloud_1h->height) ? (cloud_1h->width / 2) * 0.75 : (cloud_1h->height / 2) * 0.75;
 	for (size_t i = 0; i < cloud_1h->height; i++) {
-		for (size_t j = 0; j < cloud_1h->width; ++j, ++iter_x_1h, ++iter_y_1h, ++iter_z_1h) {
+		for (size_t j = 0; j < cloud_1h->width && iter_x_1h != iter_x_1h.end(); ++j, ++iter_x_1h, ++iter_y_1h, ++iter_z_1h) {
+			sum_1h_all->x += *iter_x_1h;
+			sum_1h_all->y += *iter_y_1h;
+			sum_1h_all->z += *iter_z_1h;
+			
+			num_hand_all++;
+			
+			hand_all.push_back(new Point3(*iter_x_1h, *iter_y_1h, *iter_z_1h));
+		
 			if (fabs(i - center_x_1h) < radius_1h && fabs(j - center_y_1h) < radius_1h) {
 				sum_1h->x += *iter_x_1h;
 				sum_1h->y += *iter_y_1h;
@@ -470,7 +724,7 @@ bool PointingGesture::calculatePointingGesture(
 	float center_y_2h = cloud_2h->width / 2;
 	float radius_2h = (cloud_2h->width < cloud_2h->height) ? (cloud_2h->width / 2) * 0.75 : (cloud_2h->height / 2) * 0.75;
 	for (size_t i = 0; i < cloud_2h->height; i++) {
-		for (size_t j = 0; j < cloud_2h->width; ++j, ++iter_x_2h, ++iter_y_2h, ++iter_z_2h) {
+		for (size_t j = 0; j < cloud_2h->width && iter_x_2h != iter_x_2h.end(); ++j, ++iter_x_2h, ++iter_y_2h, ++iter_z_2h) {
 			if (fabs(i - center_x_2h) < radius_2h && fabs(j - center_y_2h) < radius_2h) {
 				sum_2h->x += *iter_x_2h;
 				sum_2h->y += *iter_y_2h;
@@ -483,21 +737,21 @@ bool PointingGesture::calculatePointingGesture(
 		}
 	}
 
-	
+
 	double roll_closest, pitch_closest, yaw_closest;
 	double roll_med, pitch_med, yaw_med;
 	double roll_ave, pitch_ave, yaw_ave;
-	
+
 	//Mean Point
 	Point3* pointing_hand_ave;
-	
-	//*/\*  Average point of FACE and HANDS 
+
+	//  Average point of FACE and HANDS 
 	Point3* face_points_ave = new Point3( sum_f->x/num_face, sum_f->y/num_face, sum_f->z/num_face );
 	Point3* first_hand_points_ave = new Point3( sum_1h->x/num_first_hand, sum_1h->y/num_first_hand, sum_1h->z/num_first_hand );
 	Point3* second_hand_points_ave = new Point3( sum_2h->x/num_second_hand, sum_2h->y/num_second_hand, sum_2h->z/num_second_hand );
 	pointing_hand_ave = first_hand_points_ave;
-	
-	//*\/* Visualize
+
+	// Visualize
 	face_ave_marker->point.x = face_points_ave->x;
 	face_ave_marker->point.y = face_points_ave->y;
 	face_ave_marker->point.z = face_points_ave->z;
@@ -509,10 +763,10 @@ bool PointingGesture::calculatePointingGesture(
 	roll_ave = 0;
 	pitch_ave = atan2((pointing_hand_ave->x - face_points_ave->x), (pointing_hand_ave->z - face_points_ave->z)) - PI/2;
 	// yaw_ave = -atan2(sqrt(pow(pointing_hand_ave_Z - sumZ_f, 2) + pow(pointing_hand_ave_X - sumX_f, 2)), pointing_hand_ave_Y - sumY_f) + PI/2; 
-		// -atan2(fabs(pointing_hand_ave_X - sumX_f), (pointing_hand_ave_Y - sumY_f)) + PI/2;
+	// -atan2(fabs(pointing_hand_ave_X - sumX_f), (pointing_hand_ave_Y - sumY_f)) + PI/2;
 	int sign = (pointing_hand_ave->x > face_points_ave->x) ? -1 : 1;
 	yaw_ave = sign * (atan2(sqrt(pow(pointing_hand_ave->z - face_points_ave->z, 2) + pow(pointing_hand_ave->x - face_points_ave->x, 2)), pointing_hand_ave->y - face_points_ave->y) - PI/2); 
-		// -atan2(fabs(pointing_hand_ave_X - sumX_f), (pointing_hand_ave_Y - sumY_f)) + PI/2;
+	// -atan2(fabs(pointing_hand_ave_X - sumX_f), (pointing_hand_ave_Y - sumY_f)) + PI/2;
 
 	tf::Quaternion arrow_angle_ave = tf::createQuaternionFromRPY(roll_ave, pitch_ave, yaw_ave);
 
@@ -527,8 +781,8 @@ bool PointingGesture::calculatePointingGesture(
 	//Closest Point
 	Point3* closest_point_hand;
 	Point3* closest_point_face;
-	
-	//*/\*  Closest point to the camera in Pointing HAND
+
+	//  Closest point to the camera in Pointing HAND
 	if(first_hand_points.size() > 0 ) {
 		closest_point_hand = first_hand_points[0];
 
@@ -538,8 +792,8 @@ bool PointingGesture::calculatePointingGesture(
 			}
 		}
 	}
-	
-	//*/\*  Closest point to the camera in Pointing FACE
+
+	//  Closest point to the camera in Pointing FACE
 	if(face_points.size() > 0 ) {
 		closest_point_face = face_points[0];
 
@@ -589,5 +843,55 @@ bool PointingGesture::calculatePointingGesture(
 	arrow_med->pose.orientation.z = arrow_angle_med.getZ();
 	arrow_med->pose.orientation.w = arrow_angle_med.getW();
 
+	// Clustering
+	std::cout << "start clustering with " << face_all.size() << " " << face_points.size() << std::endl;
+	std::vector<DBSCAN::Cluster> clusters = dbscan->cluster(face_all, MIN_POINTS, EPSILON);
+	for (int k = 0; k < face_all.size(); k++) {
+	//	std::cout << face_all[k]->x << std::endl;
+	}
+	std::cout << "end clustering" << std::endl;
+	for (int i = 0; i < clusters.size(); i++) {
+		std::cout << clusters[i].cluster_id << ": " << clusters[i].points.size() << std::endl;
+		for (int j = 0; j < clusters[i].points.size(); j++) {
+			std::cout << clusters[i].points[j]->x << std::endl;
+		}
+	}
+
+/*	//Mean Point
+	//Point3* pointing_hand_ave;
+
+	//  Average point of FACE and HANDS 
+	Point3* face_points_ave = new Point3( sum_f->x/num_face, sum_f->y/num_face, sum_f->z/num_face );
+	Point3* first_hand_points_ave = new Point3( sum_1h->x/num_first_hand, sum_1h->y/num_first_hand, sum_1h->z/num_first_hand );
+	Point3* second_hand_points_ave = new Point3( sum_2h->x/num_second_hand, sum_2h->y/num_second_hand, sum_2h->z/num_second_hand );
+	pointing_hand_ave = first_hand_points_ave;
+
+	// Visualize
+	face_ave_marker->point.x = face_points_ave->x;
+	face_ave_marker->point.y = face_points_ave->y;
+	face_ave_marker->point.z = face_points_ave->z;
+
+	hand_ave_marker->point.x = pointing_hand_ave->x;
+	hand_ave_marker->point.y = pointing_hand_ave->y;
+	hand_ave_marker->point.z = pointing_hand_ave->z;
+
+	roll_ave = 0;
+	pitch_ave = atan2((pointing_hand_ave->x - face_points_ave->x), (pointing_hand_ave->z - face_points_ave->z)) - PI/2;
+	// yaw_ave = -atan2(sqrt(pow(pointing_hand_ave_Z - sumZ_f, 2) + pow(pointing_hand_ave_X - sumX_f, 2)), pointing_hand_ave_Y - sumY_f) + PI/2; 
+	// -atan2(fabs(pointing_hand_ave_X - sumX_f), (pointing_hand_ave_Y - sumY_f)) + PI/2;
+	int sign = (pointing_hand_ave->x > face_points_ave->x) ? -1 : 1;
+	yaw_ave = sign * (atan2(sqrt(pow(pointing_hand_ave->z - face_points_ave->z, 2) + pow(pointing_hand_ave->x - face_points_ave->x, 2)), pointing_hand_ave->y - face_points_ave->y) - PI/2); 
+	// -atan2(fabs(pointing_hand_ave_X - sumX_f), (pointing_hand_ave_Y - sumY_f)) + PI/2;
+
+	tf::Quaternion arrow_angle_ave = tf::createQuaternionFromRPY(roll_ave, pitch_ave, yaw_ave);
+
+	arrow_ave->pose.position.x = face_points_ave->x;
+	arrow_ave->pose.position.y = face_points_ave->y;
+	arrow_ave->pose.position.z = face_points_ave->z;
+	arrow_ave->pose.orientation.x = arrow_angle_ave.getX();
+	arrow_ave->pose.orientation.y = arrow_angle_ave.getY();
+	arrow_ave->pose.orientation.z = arrow_angle_ave.getZ();
+	arrow_ave->pose.orientation.w = arrow_angle_ave.getW();
+*/
 	return true;
 }

@@ -54,6 +54,12 @@ class PointingGesture
 				const sensor_msgs::CameraInfoConstPtr& info_msg,
 				const yolo2::ImageDetectionsConstPtr &detection_msg);
 
+		void imageOnlyCb(const sensor_msgs::ImageConstPtr& depth_msg,
+				const sensor_msgs::ImageConstPtr& rgb_msg,
+				const sensor_msgs::CameraInfoConstPtr& info_msg);
+
+		void detectionCb(const yolo2::ImageDetectionsConstPtr &detection_msg);
+
 		template<typename T>
 		bool convert(const sensor_msgs::ImageConstPtr& depth_msg,
 				const sensor_msgs::ImageConstPtr& rgb_msg,
@@ -83,16 +89,23 @@ class PointingGesture
 		ros::NodeHandlePtr rgb_nh_;
 		boost::shared_ptr<image_transport::ImageTransport> rgb_it_, depth_it_;
 
+		bool imageReceived;
+		sensor_msgs::ImageConstPtr depth_msg;
+		sensor_msgs::ImageConstPtr rgb_msg_in;
+		sensor_msgs::CameraInfoConstPtr info_msg;
+
 		// Subs
 		image_transport::SubscriberFilter sub_depth_, sub_rgb_;
 		message_filters::Subscriber<sensor_msgs::CameraInfo> sub_info_;
 		message_filters::Subscriber<yolo2::ImageDetections> sub_objects_;
-		typedef ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, yolo2::ImageDetections> SyncPolicy;
-		typedef ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, yolo2::ImageDetections> ExactSyncPolicy;
+		typedef ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo> SyncPolicy;
+		typedef ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo> ExactSyncPolicy;
 		typedef message_filters::Synchronizer<SyncPolicy> Synchronizer;
 		typedef message_filters::Synchronizer<ExactSyncPolicy> ExactSynchronizer;
 		boost::shared_ptr<Synchronizer> sync_;
 		boost::shared_ptr<ExactSynchronizer> exact_sync_;
+
+		ros::Subscriber sub_objects_only_;
 
 		// Pubs
 		ros::Publisher pub_point_cloud_;

@@ -30,7 +30,7 @@ public:
 	};
 
 public:
-	std::vector<Cluster> dbscan(
+	std::vector<Cluster> cluster(
 			const std::vector<Point3*>& points,
 			double epsilon,
 			unsigned int minpts);

@@ -150,9 +150,9 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/hands_3d_node.cpp)
-#add_executable(reconstruct src/reconstruct.cpp)
+add_executable(reconstruct src/reconstruct.cpp)
 
-add_executable(reconstruct
+add_executable(pointing_gesture
 	src/main.cpp
 	src/pointing_gesture.cpp
 	src/dbscan.cpp)
@@ -168,6 +168,11 @@ add_executable(reconstruct
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(reconstruct
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+)
+
+target_link_libraries(pointing_gesture
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )

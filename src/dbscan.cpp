@@ -69,7 +69,7 @@ void DBSCAN::destroy_epsilon_neighbours(DBSCAN::EpsilonNeighbours *en)
 }
 
 //DBSCAN Algorithm
-std::vector<DBSCAN::Cluster> DBSCAN::dbscan(const std::vector<Point3*>& points, double epsilon, unsigned int minpts)
+std::vector<DBSCAN::Cluster> DBSCAN::cluster(const std::vector<Point3*>& points, double epsilon, unsigned int minpts)
 {
 	std::vector<DBSCAN::Cluster> clusters;
 	clusters.resize(1);

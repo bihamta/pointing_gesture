@@ -17,6 +17,7 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PointStamped.h>
+#include <visualization_msgs/Marker.h>
 #include <image_geometry/pinhole_camera_model.h>
 #include <depth_image_proc/depth_traits.h>
 #include <cv_bridge/cv_bridge.h>
@@ -67,8 +68,8 @@ class PointingGesture
 				PointCloud::Ptr& cloud_1h,
 				PointCloud::Ptr& cloud_2h,
 				PointCloud::Ptr& cloud_f,
-				const geometry_msgs::PointStamped::Ptr& face_ave,
-				const geometry_msgs::PointStamped::Ptr& right_hand_ave,
+				const geometry_msgs::PointStamped::Ptr& face_ave_pose,
+				const geometry_msgs::PointStamped::Ptr& hand_ave_pose,
 				const geometry_msgs::PoseStamped::Ptr& arrow_ave,
 				const geometry_msgs::PoseStamped::Ptr& arrow_med,
 				const geometry_msgs::PoseStamped::Ptr& arrow_closest,
@@ -76,6 +77,10 @@ class PointingGesture
 				int red_offset, int green_offset, int blue_offset, int color_step);
 
 		Point3* points_median(std::vector<Point3*> &v);
+
+    bool end_point(
+				const geometry_msgs::PointStamped::Ptr& hand_ave_pose,
+				const geometry_msgs::PointStamped::Ptr& face_ave_pose);
 
 	protected:
 		ros::NodeHandle nh;
@@ -111,10 +116,11 @@ class PointingGesture
 		ros::Publisher pub_pose_face;
 		ros::Publisher pub_arrow_ave;
 		ros::Publisher pub_arrow_med;
-		ros::Publisher pub_arrow_furthest;
 		ros::Publisher pub_arrow_closest;
 		ros::Publisher pub_point_med;
 		ros::Publisher pub_point_ave;
+		ros::Publisher pub_face_ave_marker;
+		ros::Publisher pub_hand_ave_marker;
 
 		image_geometry::PinholeCameraModel model_;
 

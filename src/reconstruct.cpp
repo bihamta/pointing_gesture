@@ -14,6 +14,7 @@
 #include <sensor_msgs/point_cloud2_iterator.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/Pose.h>
+#include <visualization_msgs/Marker.h>
 #include <geometry_msgs/PointStamped.h>
 #include <image_geometry/pinhole_camera_model.h>
 #include <depth_image_proc/depth_traits.h>
@@ -31,10 +32,13 @@
 #include <pcl/filters/median_filter.h>
 #include <tf/transform_datatypes.h>
 #include <math.h>
+#include "nabo/nabo.h"
 #define PI 3.14159265
 
 using namespace message_filters::sync_policies;
-using namespace cv;
+// using namespace cv;
+using namespace Nabo;
+using namespace Eigen;
 
 static const std::string OPENCV_WINDOW = "Image window";
 typedef sensor_msgs::PointCloud2 PointCloud;
@@ -83,6 +87,7 @@ protected:
   ros::Publisher pub_arrow_closest;
   ros::Publisher pub_point_med;
   ros::Publisher pub_point_ave;
+  ros::Publisher pub_arrowMarker_ave;
 
   image_geometry::PinholeCameraModel model_;
 
@@ -111,6 +116,7 @@ public:
                const geometry_msgs::PoseStamped::Ptr& arrow_closest,
                //const geometry_msgs::PointStamped::Ptr& point_med,
                //const geometry_msgs::PointStamped::Ptr& point_ave,
+               const visualization_msgs::Marker::Ptr& arrowMarker_ave,
                const yolo2::ImageDetectionsConstPtr& detection_msg,
                int red_offset, int green_offset, int blue_offset, int color_step);
 
@@ -173,6 +179,7 @@ Reconstruct::Reconstruct(ros::NodeHandle& _nh)
   pub_arrow_med = output_nh.advertise<geometry_msgs::PoseStamped>("arrow_med", 1);
   pub_arrow_furthest = output_nh.advertise<geometry_msgs::PoseStamped>("arrow_furthest", 1);
   pub_arrow_closest = output_nh.advertise<geometry_msgs::PoseStamped>("arrow_closest", 1);
+  pub_arrowMarker_ave = output_nh.advertise<visualization_msgs::Marker>("arrowMarker_ave",1);
 
 }
 
@@ -210,7 +217,7 @@ void Reconstruct::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
     sensor_msgs::CameraInfo info_msg_tmp = *info_msg;
     info_msg_tmp.width = depth_msg->width;
     info_msg_tmp.height = depth_msg->height;
-    float ratio = float(depth_msg->width)/float(rgb_msg->width);
+    float ratio = float(depth_msg->width) / float(rgb_msg->width);
     info_msg_tmp.K[0] *= ratio;
     info_msg_tmp.K[2] *= ratio;
     info_msg_tmp.K[4] *= ratio;
@@ -301,6 +308,12 @@ void Reconstruct::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
   geometry_msgs::PoseStamped::Ptr arrow_closest (new geometry_msgs::PoseStamped);
   arrow_closest->header = depth_msg->header;
 
+  visualization_msgs::Marker::Ptr arrowMarker_ave (new visualization_msgs::Marker);
+  arrowMarker_ave->header = depth_msg->header;
+  arrowMarker_ave->type = visualization_msgs::Marker::ARROW;
+  arrowMarker_ave->action = visualization_msgs::Marker::ADD;
+  arrowMarker_ave->color.a = 1.0;
+
   // Allocate new point cloud message
   PointCloud::Ptr cloud_msg (new PointCloud);
   cloud_msg->header = depth_msg->header;
@@ -344,11 +357,11 @@ void Reconstruct::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
   bool success = false;
   if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1)
   {
-    success = convert<uint16_t>(depth_msg, rgb_msg, cloud_msg, cloud_lh, cloud_rh, cloud_f, face_ave, right_hand_ave, arrow_ave, arrow_med, arrow_furthest, arrow_closest, detection_msg, red_offset, green_offset, blue_offset, color_step);
+    success = convert<uint16_t>(depth_msg, rgb_msg, cloud_msg, cloud_lh, cloud_rh, cloud_f, face_ave, right_hand_ave, arrow_ave, arrow_med, arrow_furthest, arrow_closest, arrowMarker_ave, detection_msg, red_offset, green_offset, blue_offset, color_step);
   }
   else if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_32FC1)
   {
-    success = convert<float>(depth_msg, rgb_msg, cloud_msg, cloud_lh, cloud_rh, cloud_f, face_ave, right_hand_ave, arrow_ave, arrow_med, arrow_furthest, arrow_closest, detection_msg, red_offset, green_offset, blue_offset, color_step);
+    success = convert<float>(depth_msg, rgb_msg, cloud_msg, cloud_lh, cloud_rh, cloud_f, face_ave, right_hand_ave, arrow_ave, arrow_med, arrow_furthest, arrow_closest, arrowMarker_ave, detection_msg, red_offset, green_offset, blue_offset, color_step);
   }
   else
   {
@@ -366,7 +379,9 @@ void Reconstruct::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
   pub_arrow_med.publish(arrow_med);
   pub_arrow_furthest.publish(arrow_furthest);
   pub_arrow_closest.publish(arrow_closest);
-
+  pub_arrowMarker_ave.publish(arrowMarker_ave);
+  
+  
   if (!success)
   {
     ROS_WARN_THROTTLE(1, "Reconstruction of the bounding box failed. Will not publish the object! (Bad depth?)");
@@ -386,6 +401,7 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
                                       const geometry_msgs::PoseStamped::Ptr& arrow_med,
                                       const geometry_msgs::PoseStamped::Ptr& arrow_furthest,
                                       const geometry_msgs::PoseStamped::Ptr& arrow_closest,
+                                      const visualization_msgs::Marker::Ptr& arrowMarker_ave,
                                       const yolo2::ImageDetectionsConstPtr& detection_msg,
                                       int red_offset, int green_offset, int blue_offset, int color_step)
 {
@@ -464,29 +480,21 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
         {
           in_bb = true;
           _class_id = detection_msg.get()->detections[i].class_id;
-//          ROS_INFO("U and V %d , %d, ---->", u, v, i);
-
           if( _class_id == 0 && depth_image_proc::DepthTraits<T>::valid(depth)  )
           {
-                if( _pointing_hand_i == -1)
+                if( _pointing_hand_i == -1)//detecting hands in two different boxes
                 {
                     _pointing_hand_i = i;
                 }
                 if(_pointing_hand_i == i){
+                  // x y z of points of the pointing hand
                   *iter_x_rh = (u - center_x) * depth * constant_x;
                   *iter_y_rh = (v - center_y) * depth * constant_y;
                   *iter_z_rh = depth_image_proc::DepthTraits<T>::toMeters(depth);
 
-                  if ( v == (detection_msg.get()->detections[i].roi.y_offset+(detection_msg.get()->detections[i].roi.height/2)))
-                  {
-                      furthest_x = *iter_x_rh;
-                      furthest_y = *iter_y_rh;
-                      furthest_z = *iter_z_rh;
-                  }
-
                   if((u - (detection_msg.get()->detections[i].roi.x_offset+detection_msg.get()->detections[i].roi.width/2) < ((detection_msg.get()->detections[i].roi.width)*0.5)/2)
                           && (v - (detection_msg.get()->detections[i].roi.y_offset+detection_msg.get()->detections[i].roi.height/2) < ((detection_msg.get()->detections[i].roi.height)*0.5)/2)
-                          )
+                          ) //TODO
                   {
                     sumX_rh += *iter_x_rh;
                     sumY_rh += *iter_y_rh;
@@ -561,7 +569,7 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
         *iter_y = (v - center_y) * depth * constant_y;
         *iter_z = depth_image_proc::DepthTraits<T>::toMeters(depth);
 
-       //Class_ID (RightHand = 2, Face = 0, LeftHand = 1)
+       //Class_ID (Hands = 0, Face = 1)
         *iter_a = _class_id;
        // Fill in color
         *iter_r = rgb[red_offset];
@@ -581,6 +589,7 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 
   depth_row = reinterpret_cast<const T*>(&depth_msg->data[0]);
 
+//Mean of the points
   sumX_f = sumX_f/num_face;
   sumY_f = sumY_f/num_face;
   sumZ_f = sumZ_f/num_face;
@@ -657,14 +666,55 @@ bool Reconstruct::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 //  right_hand_ave->point.x = closest_point_X;
 //  right_hand_ave->point.y = closest_point_Y;
 //  right_hand_ave->point.z = min;
+  arrowMarker_ave->scale.x = 0.01;
+  arrowMarker_ave->scale.y = 0.1;
+  arrowMarker_ave->scale.z = 0.1;
+
+  arrowMarker_ave->points.resize(2);
+  arrowMarker_ave->points[0].x = sumX_f;
+  arrowMarker_ave->points[0].y = sumY_f;
+  arrowMarker_ave->points[0].z = sumZ_f;
+
+  arrowMarker_ave->points[1].x = pointing_hand_X;
+  arrowMarker_ave->points[1].y = pointing_hand_Y;
+  arrowMarker_ave->points[1].z = pointing_hand_Z;
+  
+  arrowMarker_ave->colors.resize(2);
+  arrowMarker_ave->colors[0].r = 1;
+  arrowMarker_ave->colors[0].g = 0;
+  arrowMarker_ave->colors[0].b = 0;
+  arrowMarker_ave->colors[0].a = 1;
+
+  arrowMarker_ave->colors[1].r = 1;
+  arrowMarker_ave->colors[1].g = 0;
+  arrowMarker_ave->colors[1].b = 0;
+  arrowMarker_ave->colors[1].a = 1;
+
+
+  float dx = -pointing_hand_Z + sumZ_f;
+  float dy = pointing_hand_X - sumX_f;
+  float dz = -pointing_hand_Y + sumY_f;
 
   roll_ave = 0;
-  pitch_ave = atan2((pointing_hand_X - sumX_f), (pointing_hand_Z - sumZ_f)) - PI/2;
-  // yaw_ave = -atan2(sqrt(pow(pointing_hand_Z - sumZ_f, 2) + pow(pointing_hand_X - sumX_f, 2)), pointing_hand_Y - sumY_f) + PI/2; // -atan2(fabs(pointing_hand_X - sumX_f), (pointing_hand_Y - sumY_f)) + PI/2;
-  int sign = (pointing_hand_X > sumX_f) ? -1 : 1;
-  yaw_ave = sign * (atan2(sqrt(pow(pointing_hand_Z - sumZ_f, 2) + pow(pointing_hand_X - sumX_f, 2)), pointing_hand_Y - sumY_f) - PI/2); // -atan2(fabs(pointing_hand_X - sumX_f), (pointing_hand_Y - sumY_f)) + PI/2;
+  yaw_ave = atan2(dy, dx);
+  pitch_ave = atan2(sqrt(pow(dx, 2) + pow(dy, 2)), dz) - PI/2;
+  // pitch_ave = 1.0472;
 
-  tf::Quaternion arrow_angle_ave = tf::createQuaternionFromRPY(roll_ave , pitch_ave, yaw_ave);
+  tf::Matrix3x3 obs_mat;
+  obs_mat.setEulerYPR(yaw_ave, pitch_ave, roll_ave);
+
+  tf::Quaternion arrow_angle_ave;
+  obs_mat.getRotation(arrow_angle_ave);
+
+  ROS_INFO("roll %f, pitch %f, yaw %f", roll_ave * 180/PI, pitch_ave * 180/PI, yaw_ave * 180/PI);
+
+//  roll_ave = 0;
+//  pitch_ave = atan2((pointing_hand_X - sumX_f), (pointing_hand_Z - sumZ_f)) - PI/2;
+//  // yaw_ave = -atan2(sqrt(pow(pointing_hand_Z - sumZ_f, 2) + pow(pointing_hand_X - sumX_f, 2)), pointing_hand_Y - sumY_f) + PI/2; // -atan2(fabs(pointing_hand_X - sumX_f), (pointing_hand_Y - sumY_f)) + PI/2;
+//  int sign = (pointing_hand_X > sumX_f) ? -1 : 1;
+//  yaw_ave = sign * (atan2(sqrt(pow(pointing_hand_Z - sumZ_f, 2) + pow(pointing_hand_X - sumX_f, 2)), pointing_hand_Y - sumY_f) - PI/2); // -atan2(fabs(pointing_hand_X - sumX_f), (pointing_hand_Y - sumY_f)) + PI/2;
+
+  // tf::Quaternion arrow_angle_ave = tf::createQuaternionFromRPY(roll_ave , pitch_ave, yaw_ave); TODO: has been removed temporary
 
   arrow_ave->pose.position.x = sumX_f;
   arrow_ave->pose.position.y = sumY_f;

@@ -177,7 +177,7 @@ target_link_libraries(pointing_gesture
   ${OpenCV_LIBRARIES}
 )
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -std=c++11 -march=native" )
+ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -std=c++11 -march=native" )
 
 #############
 ## Install ##

@@ -9,7 +9,7 @@ class DBSCAN {
 public:
 	class Node {
 	public:
-		int index;
+		unsigned int index;
 		DBSCAN::Node *next;
 	public:
 		Node() : next(NULL) {};
@@ -20,7 +20,7 @@ public:
 		unsigned int num_members;
 		Node *head, *tail;
 	public:
-		EpsilonNeighbours() : head(NULL), tail(NULL) {};
+		EpsilonNeighbours() : head(NULL), tail(NULL), num_members(0) {};
 	};
 
 	class Cluster {

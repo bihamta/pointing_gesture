@@ -67,20 +67,15 @@ class PointingGesture
 				PointCloud::Ptr& cloud_1h,
 				PointCloud::Ptr& cloud_2h,
 				PointCloud::Ptr& cloud_f,
-				const yolo2::ImageDetectionsConstPtr& detection_msg,
-				int red_offset, int green_offset, int blue_offset, int color_step);
-
-		Point3* points_median(std::vector<Point3*> &v);
-
-		bool calculatePointingGesture(
-				const PointCloud::Ptr& cloud_f,
-				const PointCloud::Ptr& cloud_1h,
-				const PointCloud::Ptr& cloud_2h,
 				const geometry_msgs::PointStamped::Ptr& face_ave,
 				const geometry_msgs::PointStamped::Ptr& right_hand_ave,
 				const geometry_msgs::PoseStamped::Ptr& arrow_ave,
 				const geometry_msgs::PoseStamped::Ptr& arrow_med,
-				const geometry_msgs::PoseStamped::Ptr& arrow_closest);
+				const geometry_msgs::PoseStamped::Ptr& arrow_closest,
+				const yolo2::ImageDetectionsConstPtr& detection_msg,
+				int red_offset, int green_offset, int blue_offset, int color_step);
+
+		Point3* points_median(std::vector<Point3*> &v);
 
 	protected:
 		ros::NodeHandle nh;

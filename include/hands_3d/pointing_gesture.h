@@ -70,6 +70,7 @@ class PointingGesture
 				PointCloud::Ptr& cloud_f,
 				const geometry_msgs::PointStamped::Ptr& face_ave_pose,
 				const geometry_msgs::PointStamped::Ptr& hand_ave_pose,
+        const geometry_msgs::PointStamped::Ptr& end_point,
 				const geometry_msgs::PoseStamped::Ptr& arrow_ave,
 				const geometry_msgs::PoseStamped::Ptr& arrow_med,
 				const geometry_msgs::PoseStamped::Ptr& arrow_closest,
@@ -78,9 +79,10 @@ class PointingGesture
 
 		Point3* points_median(std::vector<Point3*> &v);
 
-    bool end_point(
+    bool finding_end_point(
 				const geometry_msgs::PointStamped::Ptr& hand_ave_pose,
-				const geometry_msgs::PointStamped::Ptr& face_ave_pose);
+				const geometry_msgs::PointStamped::Ptr& face_ave_pose,
+        const geometry_msgs::PointStamped::Ptr& end_point); 
 
 	protected:
 		ros::NodeHandle nh;
@@ -113,6 +115,7 @@ class PointingGesture
 		ros::Publisher pub_point_cloud_left_hand;
 		ros::Publisher pub_point_cloud_face;
 		ros::Publisher pub_pose_right_hand;
+		ros::Publisher pub_end_point;
 		ros::Publisher pub_pose_face;
 		ros::Publisher pub_arrow_ave;
 		ros::Publisher pub_arrow_med;

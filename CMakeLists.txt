@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
   yolo2
   pcl_ros
   geometry_msgs
+  nav_msgs
 )
 
 find_package(OpenCV REQUIRED)
@@ -156,6 +157,10 @@ add_executable(pointing_gesture
 	src/main.cpp
 	src/pointing_gesture.cpp
 	src/dbscan.cpp)
+
+add_executable(navigation
+	src/navigation.cpp)
+
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -173,6 +178,11 @@ target_link_libraries(reconstruct
 )
 
 target_link_libraries(pointing_gesture
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+)
+
+target_link_libraries(navigation
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )

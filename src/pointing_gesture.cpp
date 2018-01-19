@@ -2,7 +2,7 @@
 
 #define MIN_POINTS 10
 #define EPSILON 0.02
-#define ROBOT_HEIGHT 1.14;
+#define ROBOT_HEIGHT 1.21;
 
 PointingGesture::PointingGesture(ros::NodeHandle& _nh, ros::NodeHandle& _pnh) : nh(_nh), pnh(_pnh)
 {
@@ -839,7 +839,7 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
   arrowMarker_ave->points[1].z = pointing_hand_ave->z;
   
   arrowMarker_ave->colors.resize(2);
-  arrowMarker_ave->colors[0].r = 1;
+  arrowMarker_ave->colors[0].r = 255;
   arrowMarker_ave->colors[0].g = 0;
   arrowMarker_ave->colors[0].b = 0;
   arrowMarker_ave->colors[0].a = 1;
@@ -916,6 +916,7 @@ bool PointingGesture::finding_end_point( const geometry_msgs::PointStamped::Ptr&
                                  const geometry_msgs::PointStamped::Ptr& face_ave_pose, 
                                  const geometry_msgs::PointStamped::Ptr& end_point) 
 {
+/*  
    float pointing_yaw = 0;
    float pointing_roll = 0;
    float pointing_pitch = 0;
@@ -925,21 +926,20 @@ bool PointingGesture::finding_end_point( const geometry_msgs::PointStamped::Ptr&
 
    pointing_pitch = PI/2 - ((atan2(sqrt(pow(face_ave_pose->point.x - hand_ave_pose->point.x, 2) + pow(face_ave_pose->point.z - hand_ave_pose->point.z, 2)), face_ave_pose->point.y - hand_ave_pose->point.y) - PI/2 ));
 
-   std::cout << "Pitch: "<< pointing_pitch * (180/PI) << "Yaw: " << pointing_yaw * (180/PI) << std::endl; 
+//   std::cout << "Pitch: "<< pointing_pitch * (180/PI) << "Yaw: " << pointing_yaw * (180/PI) << std::endl; 
   float Y = 0, X = 0, Z = 0; //Y is Height and Z is Depth ( assumption )
-  
-  if (pointing_yaw < -90 && pointing_yaw > -180)
+  if (pointing_yaw < -PI/2 && pointing_yaw > -PI)
   {
-    x_sign = -1;
-    z_sign = -1;
-  }else if(pointing_yaw > 90 && pointing_yaw < 180){
     x_sign = 1;
-    z_sign = -1;
+    z_sign = 1;
+  }else if(pointing_yaw > PI/2 && pointing_yaw < PI){
+    x_sign = 1;
+    z_sign = 1;
   }else if (pointing_yaw > 0){
     x_sign = -1;
     z_sign = -1;
   } else {
-    x_sign = 1;
+    x_sign = -1;
     z_sign = -1;
   }
   Y = -face_ave_pose->point.y + ROBOT_HEIGHT;
@@ -947,10 +947,23 @@ bool PointingGesture::finding_end_point( const geometry_msgs::PointStamped::Ptr&
   X = x_sign * (Z * tan(pointing_yaw));
 //  X = 0;
   //std::cout << tan(45) << std::endl; 
-  std::cout << "X: " << X << "Y: " << Y << "Z: " << Z << std::endl;
+ // std::cout << "X: " << X << "Y: " << Y << "Z: " << Z << std::endl;
+  std::cout << "X: " << X << " Z: " << Z << std::endl;
   end_point->point.x = X;
   end_point->point.y = 0;
   end_point->point.z = face_ave_pose->point.z + (z_sign) * Z; 
+*/
+
+  face_ave_pose->point.y = -face_ave_pose->point.y + ROBOT_HEIGHT;
+  hand_ave_pose->point.y = -hand_ave_pose->point.y + ROBOT_HEIGHT;
+  double x_coeff = (face_ave_pose->point.x - hand_ave_pose->point.x);
+  double y_coeff = (face_ave_pose->point.y - hand_ave_pose->point.y);
+  double z_coeff = (face_ave_pose->point.z - hand_ave_pose->point.z);
+  double t = face_ave_pose->point.y / y_coeff;
+  end_point->point.x = face_ave_pose->point.x - x_coeff * t;
+  end_point->point.y = 0;
+  end_point->point.z = face_ave_pose->point.z - z_coeff * t;
+  std::cout << "X: " << end_point->point.x << " Z: " << end_point->point.z << std::endl;
 
   return true;
 /*   tf::Quaternion q(quat.x, quat.y, quat.z, quat.w);

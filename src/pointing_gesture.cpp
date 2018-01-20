@@ -831,38 +831,38 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 	arrow_med->pose.orientation.y = arrow_angle_med.getY();
 	arrow_med->pose.orientation.z = arrow_angle_med.getZ();
 	arrow_med->pose.orientation.w = arrow_angle_med.getW();
-	 */
-	visualization_msgs::Marker::Ptr arrowMarker_ave (new visualization_msgs::Marker);
-	arrowMarker_ave->header = depth_msg->header;
-	arrowMarker_ave->type = visualization_msgs::Marker::ARROW;
-	arrowMarker_ave->action = visualization_msgs::Marker::ADD;
-	arrowMarker_ave->color.a = 1.0;
-	arrowMarker_ave->scale.x = 0.01;
-	arrowMarker_ave->scale.y = 0.1;
-	arrowMarker_ave->scale.z = 0.1;
+*/	
+  visualization_msgs::Marker::Ptr arrowMarker_ave (new visualization_msgs::Marker);
+  arrowMarker_ave->header = depth_msg->header;
+  arrowMarker_ave->type = visualization_msgs::Marker::ARROW;
+  arrowMarker_ave->action = visualization_msgs::Marker::ADD;
+  arrowMarker_ave->color.a = 1.0;
+  arrowMarker_ave->scale.x = 0.01;
+  arrowMarker_ave->scale.y = 0.1;
+  arrowMarker_ave->scale.z = 0.1;
 
-	arrowMarker_ave->points.resize(2);
-	arrowMarker_ave->points[0].x = face_points_ave->x;
-	arrowMarker_ave->points[0].y = face_points_ave->y;
-	arrowMarker_ave->points[0].z = face_points_ave->z;
+  arrowMarker_ave->points.resize(2);
+  arrowMarker_ave->points[0].x = face_points_ave->x;
+  arrowMarker_ave->points[0].y = face_points_ave->y;
+  arrowMarker_ave->points[0].z = face_points_ave->z;
 
-	arrowMarker_ave->points[1].x = pointing_hand_ave->x;
-	arrowMarker_ave->points[1].y = pointing_hand_ave->y;
-	arrowMarker_ave->points[1].z = pointing_hand_ave->z;
+  arrowMarker_ave->points[1].x = pointing_hand_ave->x;
+  arrowMarker_ave->points[1].y = pointing_hand_ave->y;
+  arrowMarker_ave->points[1].z = pointing_hand_ave->z;
+  
+  arrowMarker_ave->colors.resize(2);
+  arrowMarker_ave->colors[0].r = 255;
+  arrowMarker_ave->colors[0].g = 0;
+  arrowMarker_ave->colors[0].b = 0;
+  arrowMarker_ave->colors[0].a = 1;
 
-	arrowMarker_ave->colors.resize(2);
-	arrowMarker_ave->colors[0].r = 1;
-	arrowMarker_ave->colors[0].g = 0;
-	arrowMarker_ave->colors[0].b = 0;
-	arrowMarker_ave->colors[0].a = 1;
+  arrowMarker_ave->colors[1].r = 1;
+  arrowMarker_ave->colors[1].g = 0;
+  arrowMarker_ave->colors[1].b = 0;
+  arrowMarker_ave->colors[1].a = 1;
 
-	arrowMarker_ave->colors[1].r = 1;
-	arrowMarker_ave->colors[1].g = 0;
-	arrowMarker_ave->colors[1].b = 0;
-	arrowMarker_ave->colors[1].a = 1;
+	pub_hand_ave_marker.publish(arrowMarker_ave);
 
-	pub_arrowMarker_ave.publish(arrowMarker_ave);
-	
 	// Clustering
 	int cluster_max_face = 0, cluster_max_face_index = 0;
 	int cluster_max_hand = 0, cluster_max_hand_index = 0;
@@ -916,6 +916,7 @@ bool PointingGesture::finding_end_point( const geometry_msgs::PointStamped::Ptr&
 		const geometry_msgs::PointStamped::Ptr& face_ave_pose, 
 		const geometry_msgs::PointStamped::Ptr& end_point) 
 {
+/*
 	float pointing_yaw = 0;
 	float pointing_roll = 0;
 	float pointing_pitch = 0;
@@ -925,29 +926,36 @@ bool PointingGesture::finding_end_point( const geometry_msgs::PointStamped::Ptr&
 
 	pointing_pitch = PI/2 - ((atan2(sqrt(pow(face_ave_pose->point.x - hand_ave_pose->point.x, 2) + pow(face_ave_pose->point.z - hand_ave_pose->point.z, 2)), face_ave_pose->point.y - hand_ave_pose->point.y) - PI/2 ));
 
-	std::cout << "Pitch: "<< pointing_pitch * (180/PI) << "Yaw: " << pointing_yaw * (180/PI) << std::endl; 
 	float Y = 0, X = 0, Z = 0; //Y is Height and Z is Depth ( assumption )
 
-	if (pointing_yaw < -90 && pointing_yaw > -180)
+	if (pointing_yaw < -(PI/2) && pointing_yaw > -PI)
 	{
-		x_sign = -1;
-		z_sign = -1;
-	}else if(pointing_yaw > 90 && pointing_yaw < 180){
 		x_sign = 1;
-		z_sign = -1;
+		z_sign = 1;
+	}else if(pointing_yaw > PI/2 && pointing_yaw < PI){
+		x_sign = 1;
+		z_sign = 1;
 	}else if (pointing_yaw > 0){
 		x_sign = -1;
 		z_sign = -1;
 	} else {
-		x_sign = 1;
+		x_sign = -1;
 		z_sign = -1;
 	}
 	Y = -face_ave_pose->point.y + ROBOT_HEIGHT;
 	Z = Y * tan(pointing_pitch);
 	X = x_sign * (Z * tan(pointing_yaw));
-	//  X = 0;
-	//std::cout << tan(45) << std::endl; 
-	std::cout << "X: " << X << "Y: " << Y << "Z: " << Z << std::endl;
+*/
+	face_ave_pose->point.y = -face_ave_pose->point.y + ROBOT_HEIGHT;
+	hand_ave_pose->point.y = -hand_ave_pose->point.y + ROBOT_HEIGHT;
+	double x_coeff = (face_ave_pose->point.x - hand_ave_pose->point.x);
+	double y_coeff = (face_ave_pose->point.y - hand_ave_pose->point.y);
+	double z_coeff = (face_ave_pose->point.z - hand_ave_pose->point.z);
+	double t = face_ave_pose->point.y / y_coeff;
+	end_point->point.x = face_ave_pose->point.x - x_coeff * t;
+	end_point->point.y = 0;
+	end_point->point.z = face_ave_pose->point.z - z_coeff * t;
+	std::cout << "X: " << end_point->point.x << " Z: " << end_point->point.z << std::endl;
 	end_point->point.x = X;
 	end_point->point.y = 0;
 	end_point->point.z = face_ave_pose->point.z + (z_sign) * Z; 

@@ -6,8 +6,14 @@ from geometry_msgs.msg import TransformStamped
 from geometry_msgs.msg import PointStamped
 
 
-face = None
-hand = None
+face_ave = None
+hand_ave = None
+face_med = None
+hand_med = None
+face_cls = None
+hand_cls = None
+face_ave_dbscan = None
+hand_ave_dbscan = None
 glass = None
 glove = None
 camera = None
@@ -16,13 +22,37 @@ counter = 0
 cam_roll = 0
 cam_pitch = 0
 cam_yaw = 0
-def face_pose_callback(data):
-    global face
-    face = data
+def face_ave_pose_callback(data):
+    global face_ave
+    face_ave = data
 
-def hand_pose_callback(data):
-    global hand
-    hand = data
+def hand_ave_pose_callback(data):
+    global hand_ave
+    hand_ave = data
+   
+def face_med_pose_callback(data):
+    global face_med
+    face_med = data
+
+def hand_med_pose_callback(data):
+    global hand_med
+    hand_med = data
+   
+def face_cls_pose_callback(data):
+    global face_cls
+    face_cls = data
+
+def hand_cls_pose_callback(data):
+    global hand_cls
+    hand_cls = data
+   
+def face_ave_dbscan_pose_callback(data):
+    global face_ave_dbscan
+    face_ave_dbscan = data
+
+def hand_ave_dbscan_pose_callback(data):
+    global hand_ave_dbscan
+    hand_ave_dbscan = data
    
 def vicon_glass_callback(data):
     global glass
@@ -39,11 +69,11 @@ def vicon_camera_callback(data):
 #    print ("{:10.2f}".format(cam_roll*180/math.pi)+"{:10.2f}".format(cam_pitch*180/math.pi)+"{:10.2f}".format(cam_yaw*180/math.pi))
 
 def vicon_glove_callback(data):
-    global glove, glass, hand, face, summ, counter, cam_roll, cam_pitch, cam_yaw
+    global glove, glass, hand_ave, face_ave, summ, counter, cam_roll, cam_pitch, cam_yaw
     glove = data
 #    sum = 0
 #    counter = 0
-    if (glass == None or glove == None or hand == None or face == None):
+    if (glass == None or glove == None or hand_ave == None or face_ave == None):
       return
 
     A = cam_yaw
@@ -78,35 +108,68 @@ def vicon_glove_callback(data):
 #    vicon_rad = -math.atan2(glass.transform.translation.y - glove.transform.translation.y, glass.transform.translation.x - glove.transform.translation.x)
 #    vicon_deg = math.degrees(vicon_rad)
 
-    face_yaw_rad = math.atan2(face.point.x - hand.point.x, face.point.z - hand.point.z)
-    face_yaw_deg = math.degrees(face_yaw_rad)
+    face_ave_yaw_rad = math.atan2(face_ave.point.x - hand_ave.point.x, face_ave.point.z - hand_ave.point.z)
+    face_ave_yaw_deg = math.degrees(face_ave_yaw_rad)
 
-    face_pitch_rad = math.atan2(math.sqrt(math.pow(face.point.x - hand.point.x, 2) + math.pow(face.point.z - hand.point.z, 2)), face.point.y - hand.point.y) - math.pi/2
-    face_pitch_deg = math.degrees(face_pitch_rad)
+    face_ave_pitch_rad = math.atan2(math.sqrt(math.pow(face_ave.point.x - hand_ave.point.x, 2) + math.pow(face_ave.point.z - hand_ave.point.z, 2)), face_ave.point.y - hand_ave.point.y) - math.pi/2
+    face_ave_pitch_deg = math.degrees(face_ave_pitch_rad)
 
-    print vicon_yaw_deg, vicon_pitch_deg, face_yaw_deg, face_pitch_deg
+    face_med_yaw_rad = math.atan2(face_med.point.x - hand_med.point.x, face_med.point.z - hand_med.point.z)
+    face_med_yaw_deg = math.degrees(face_med_yaw_rad)
+
+    face_med_pitch_rad = math.atan2(math.sqrt(math.pow(face_med.point.x - hand_med.point.x, 2) + math.pow(face_med.point.z - hand_med.point.z, 2)), face_med.point.y - hand_med.point.y) - math.pi/2
+    face_med_pitch_deg = math.degrees(face_med_pitch_rad)
+
+    face_cls_yaw_rad = math.atan2(face_cls.point.x - hand_cls.point.x, face_cls.point.z - hand_cls.point.z)
+    face_cls_yaw_deg = math.degrees(face_cls_yaw_rad)
+
+    face_cls_pitch_rad = math.atan2(math.sqrt(math.pow(face_cls.point.x - hand_cls.point.x, 2) + math.pow(face_cls.point.z - hand_cls.point.z, 2)), face_cls.point.y - hand_cls.point.y) - math.pi/2
+    face_cls_pitch_deg = math.degrees(face_cls_pitch_rad)
+
+    face_ave_dbscan_yaw_rad = math.atan2(face_ave_dbscan.point.x - hand_ave_dbscan.point.x, face_ave_dbscan.point.z - hand_ave_dbscan.point.z)
+    face_ave_dbscan_yaw_deg = math.degrees(face_ave_dbscan_yaw_rad)
+
+    face_ave_dbscan_pitch_rad = math.atan2(math.sqrt(math.pow(face_ave_dbscan.point.x - hand_ave_dbscan.point.x, 2) + math.pow(face_ave_dbscan.point.z - hand_ave_dbscan.point.z, 2)), face_ave_dbscan.point.y - hand_ave_dbscan.point.y) - math.pi/2
+    face_ave_dbscan_pitch_deg = math.degrees(face_ave_dbscan_pitch_rad)
+
+    print "Vicon Yaw: " , vicon_yaw_deg, "Vicon Pitch: " , vicon_pitch_deg
+    print "Yaw Average: " , face_ave_yaw_deg, "Pitch Average: " , face_ave_pitch_deg 
+    print "Yaw Median: " , face_med_yaw_deg, "Pitch Median: " , face_med_pitch_deg 
+    print "Yaw Closest: " , face_cls_yaw_deg, "Pitch Closest: " , face_cls_pitch_deg 
+    print "Yaw Average DBSCAN: " , face_ave_dbscan_yaw_deg, "Pitch Average DBSCAN: " , face_ave_dbscan_pitch_deg 
+    print "----------------------------------------------------------------------"
+    print " "
 #    face_rad = math.atan2(face.point.x - hand.point.x, face.point.z - hand.point.z)
 #    face_deg = math.degrees(face_rad)
 
 #    print face_deg, vicon_deg
 
-    accuracy = abs(vicon_yaw_deg - face_yaw_deg) / 180
-    summ = summ + accuracy
- #   print summ
-    if counter == 400:
-      print face.point.z
-      acy = summ / counter 
-      summ = 0
-      counter = 0
-      print "Here---------------------------->", acy
-    else:
-      counter = counter + 1
+#    accuracy = abs(vicon_yaw_deg - face_yaw_deg) / 180
+#    summ = summ + accuracy
+#   print summ
+#    if counter == 400:
+#      print face.point.z
+#      acy = summ / counter 
+#      summ = 0
+#      counter = 0
+#      print "Here---------------------------->", acy
+#    else:
+#      counter = counter + 1
 
 #    print vicon_deg, face_deg, face.point.z
 #    print accuracy, face.point.z
 rospy.init_node('accuracy')
-rospy.Subscriber('/3dr/face_ave_pose', PointStamped, face_pose_callback)
-rospy.Subscriber('/3dr/hand_ave_pose', PointStamped, hand_pose_callback)
+rospy.Subscriber('/3dr/face_ave_pose', PointStamped, face_ave_pose_callback)
+rospy.Subscriber('/3dr/hand_ave_pose', PointStamped, hand_ave_pose_callback)
+
+rospy.Subscriber('/3dr/face_med_pose', PointStamped, face_med_pose_callback)
+rospy.Subscriber('/3dr/hand_med_pose', PointStamped, hand_med_pose_callback)
+
+rospy.Subscriber('/3dr/face_cls_pose', PointStamped, face_cls_pose_callback)
+rospy.Subscriber('/3dr/hand_cls_pose', PointStamped, hand_cls_pose_callback)
+
+rospy.Subscriber('/3dr/face_ave_dbscan_pose', PointStamped, face_ave_dbscan_pose_callback)
+rospy.Subscriber('/3dr/hand_ave_dbscan_pose', PointStamped, hand_ave_dbscan_pose_callback)
 
 rospy.Subscriber('/vicon/Glass2/Glass2', TransformStamped, vicon_glass_callback)
 rospy.Subscriber('/vicon/Cam23/Cam23', TransformStamped, vicon_camera_callback)

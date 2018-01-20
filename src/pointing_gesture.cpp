@@ -70,7 +70,7 @@ PointingGesture::PointingGesture(ros::NodeHandle& _nh, ros::NodeHandle& _pnh) : 
 	pub_face_ave_dbscan_pose = output_nh.advertise<geometry_msgs::PointStamped>("face_ave_dbscan_pose", 1);
 	pub_hand_ave_dbscan_pose = output_nh.advertise<geometry_msgs::PointStamped>("hand_ave_dbscan_pose", 1);
 
-  	pub_arrowMarker_ave = output_nh.advertise<visualization_msgs::Marker>("hand_ave_marker",1);
+  	pub_arrowMarker_ave = output_nh.advertise<visualization_msgs::Marker>("arrowMarker_ave",1);
 }
 
 void PointingGesture::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
@@ -832,76 +832,77 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 	arrow_med->pose.orientation.z = arrow_angle_med.getZ();
 	arrow_med->pose.orientation.w = arrow_angle_med.getW();
 */	
-  visualization_msgs::Marker::Ptr arrowMarker_ave (new visualization_msgs::Marker);
-  arrowMarker_ave->header = depth_msg->header;
-  arrowMarker_ave->type = visualization_msgs::Marker::ARROW;
-  arrowMarker_ave->action = visualization_msgs::Marker::ADD;
-  arrowMarker_ave->color.a = 1.0;
-  arrowMarker_ave->scale.x = 0.01;
-  arrowMarker_ave->scale.y = 0.1;
-  arrowMarker_ave->scale.z = 0.1;
+	visualization_msgs::Marker::Ptr arrowMarker_ave (new visualization_msgs::Marker);
+	arrowMarker_ave->header = depth_msg->header;
+	arrowMarker_ave->type = visualization_msgs::Marker::ARROW;
+	arrowMarker_ave->action = visualization_msgs::Marker::ADD;
+	arrowMarker_ave->color.a = 1.0;
+	arrowMarker_ave->scale.x = 0.01;
+	arrowMarker_ave->scale.y = 0.1;
+	arrowMarker_ave->scale.z = 0.1;
 
-  arrowMarker_ave->points.resize(2);
-  arrowMarker_ave->points[0].x = face_points_ave->x;
-  arrowMarker_ave->points[0].y = face_points_ave->y;
-  arrowMarker_ave->points[0].z = face_points_ave->z;
+	arrowMarker_ave->points.resize(2);
+	arrowMarker_ave->points[0].x = face_points_ave->x;
+	arrowMarker_ave->points[0].y = face_points_ave->y;
+	arrowMarker_ave->points[0].z = face_points_ave->z;
 
-  arrowMarker_ave->points[1].x = pointing_hand_ave->x;
-  arrowMarker_ave->points[1].y = pointing_hand_ave->y;
-  arrowMarker_ave->points[1].z = pointing_hand_ave->z;
-  
-  arrowMarker_ave->colors.resize(2);
-  arrowMarker_ave->colors[0].r = 255;
-  arrowMarker_ave->colors[0].g = 0;
-  arrowMarker_ave->colors[0].b = 0;
-  arrowMarker_ave->colors[0].a = 1;
+	arrowMarker_ave->points[1].x = pointing_hand_ave->x;
+	arrowMarker_ave->points[1].y = pointing_hand_ave->y;
+	arrowMarker_ave->points[1].z = pointing_hand_ave->z;
 
-  arrowMarker_ave->colors[1].r = 1;
-  arrowMarker_ave->colors[1].g = 0;
-  arrowMarker_ave->colors[1].b = 0;
-  arrowMarker_ave->colors[1].a = 1;
+	arrowMarker_ave->colors.resize(2);
+	arrowMarker_ave->colors[0].r = 255;
+	arrowMarker_ave->colors[0].g = 0;
+	arrowMarker_ave->colors[0].b = 0;
+	arrowMarker_ave->colors[0].a = 1;
 
-	pub_hand_ave_marker.publish(arrowMarker_ave);
+	arrowMarker_ave->colors[1].r = 1;
+	arrowMarker_ave->colors[1].g = 0;
+	arrowMarker_ave->colors[1].b = 0;
+	arrowMarker_ave->colors[1].a = 1;
 
+	pub_arrowMarker_ave.publish(arrowMarker_ave);
+	std::cout << "here" << std::endl;
 	// Clustering
-	int cluster_max_face = 0, cluster_max_face_index = 0;
-	int cluster_max_hand = 0, cluster_max_hand_index = 0;
-	Point3* face_ave_dbscan = new Point3();
-	Point3* hand_ave_dbscan = new Point3();
-	std::vector<DBSCAN::Cluster> clusters_face = dbscan_face->cluster(face_all, EPSILON, MIN_POINTS);
-	std::vector<DBSCAN::Cluster> clusters_hand = dbscan_hand->cluster(hand_all, EPSILON, MIN_POINTS);
+	if( face_all.size() > 0 && hand_all.size() > 0){
+		int cluster_max_face = 0, cluster_max_face_index = 0;
+		int cluster_max_hand = 0, cluster_max_hand_index = 0;
+		Point3* face_ave_dbscan = new Point3();
+		Point3* hand_ave_dbscan = new Point3();
+		std::vector<DBSCAN::Cluster> clusters_face = dbscan_face->cluster(face_all, EPSILON, MIN_POINTS);
+		std::vector<DBSCAN::Cluster> clusters_hand = dbscan_hand->cluster(hand_all, EPSILON, MIN_POINTS);
 
-	for (int i = 0; i < clusters_face.size(); i++) {
-		if (clusters_face[i].points.size() > cluster_max_face) {
-			cluster_max_face = clusters_face[i].points.size();
-			cluster_max_face_index = i;
+		for (int i = 0; i < clusters_face.size(); i++) {
+			if (clusters_face[i].points.size() > cluster_max_face) {
+				cluster_max_face = clusters_face[i].points.size();
+				cluster_max_face_index = i;
+			}
 		}
-	}
-	for (int j = 0; j < cluster_max_face; j++) {
-		face_ave_dbscan->x += clusters_face[cluster_max_face_index].points[j]->x / j;
-		face_ave_dbscan->y += clusters_face[cluster_max_face_index].points[j]->y / j;
-		face_ave_dbscan->z += clusters_face[cluster_max_face_index].points[j]->z / j;
-	}
-	for (int k = 0; k < clusters_hand.size(); k++) {
-		if (clusters_hand[k].points.size() > cluster_max_hand) {
-			cluster_max_hand = clusters_hand[k].points.size();
-			cluster_max_hand_index = k;
+		for (int j = 1; j <= cluster_max_face; j++) {
+			face_ave_dbscan->x += clusters_face[cluster_max_face_index].points[j]->x / j;
+			face_ave_dbscan->y += clusters_face[cluster_max_face_index].points[j]->y / j;
+			face_ave_dbscan->z += clusters_face[cluster_max_face_index].points[j]->z / j;
 		}
-	}
-	for (int l = 0; l < cluster_max_hand; l++) {
-		hand_ave_dbscan->x += clusters_hand[cluster_max_hand_index].points[l]->x / l;
-		hand_ave_dbscan->y += clusters_hand[cluster_max_hand_index].points[l]->y / l;
-		hand_ave_dbscan->z += clusters_hand[cluster_max_hand_index].points[l]->z / l;
-	}
-	//Filling Poses	
-	face_ave_dbscan_pose->point.x = face_ave_dbscan->x;
-	face_ave_dbscan_pose->point.y = face_ave_dbscan->y;
-	face_ave_dbscan_pose->point.z = face_ave_dbscan->z;
+		for (int k = 0; k < clusters_hand.size(); k++) {
+			if (clusters_hand[k].points.size() > cluster_max_hand) {
+				cluster_max_hand = clusters_hand[k].points.size();
+				cluster_max_hand_index = k;
+			}
+		}
+		for (int l = 1; l <= cluster_max_hand; l++) {
+			hand_ave_dbscan->x += clusters_hand[cluster_max_hand_index].points[l]->x / l;
+			hand_ave_dbscan->y += clusters_hand[cluster_max_hand_index].points[l]->y / l;
+			hand_ave_dbscan->z += clusters_hand[cluster_max_hand_index].points[l]->z / l;
+		}
+		//Filling Poses	
+		face_ave_dbscan_pose->point.x = face_ave_dbscan->x;
+		face_ave_dbscan_pose->point.y = face_ave_dbscan->y;
+		face_ave_dbscan_pose->point.z = face_ave_dbscan->z;
 
-	hand_ave_dbscan_pose->point.x = hand_ave_dbscan->x;
-	hand_ave_dbscan_pose->point.y = hand_ave_dbscan->y;
-	hand_ave_dbscan_pose->point.z = hand_ave_dbscan->z;
-
+		hand_ave_dbscan_pose->point.x = hand_ave_dbscan->x;
+		hand_ave_dbscan_pose->point.y = hand_ave_dbscan->y;
+		hand_ave_dbscan_pose->point.z = hand_ave_dbscan->z;
+	}
 	return true;
 
 }
@@ -916,36 +917,36 @@ bool PointingGesture::finding_end_point( const geometry_msgs::PointStamped::Ptr&
 		const geometry_msgs::PointStamped::Ptr& face_ave_pose, 
 		const geometry_msgs::PointStamped::Ptr& end_point) 
 {
-/*
-	float pointing_yaw = 0;
-	float pointing_roll = 0;
-	float pointing_pitch = 0;
-	int x_sign = -1, z_sign = +1;
+	/*
+	   float pointing_yaw = 0;
+	   float pointing_roll = 0;
+	   float pointing_pitch = 0;
+	   int x_sign = -1, z_sign = +1;
 
-	pointing_yaw = atan2(face_ave_pose->point.x - hand_ave_pose->point.x, face_ave_pose->point.z - hand_ave_pose->point.z);
+	   pointing_yaw = atan2(face_ave_pose->point.x - hand_ave_pose->point.x, face_ave_pose->point.z - hand_ave_pose->point.z);
 
-	pointing_pitch = PI/2 - ((atan2(sqrt(pow(face_ave_pose->point.x - hand_ave_pose->point.x, 2) + pow(face_ave_pose->point.z - hand_ave_pose->point.z, 2)), face_ave_pose->point.y - hand_ave_pose->point.y) - PI/2 ));
+	   pointing_pitch = PI/2 - ((atan2(sqrt(pow(face_ave_pose->point.x - hand_ave_pose->point.x, 2) + pow(face_ave_pose->point.z - hand_ave_pose->point.z, 2)), face_ave_pose->point.y - hand_ave_pose->point.y) - PI/2 ));
 
-	float Y = 0, X = 0, Z = 0; //Y is Height and Z is Depth ( assumption )
+	   float Y = 0, X = 0, Z = 0; //Y is Height and Z is Depth ( assumption )
 
-	if (pointing_yaw < -(PI/2) && pointing_yaw > -PI)
-	{
-		x_sign = 1;
-		z_sign = 1;
-	}else if(pointing_yaw > PI/2 && pointing_yaw < PI){
-		x_sign = 1;
-		z_sign = 1;
-	}else if (pointing_yaw > 0){
-		x_sign = -1;
-		z_sign = -1;
-	} else {
-		x_sign = -1;
-		z_sign = -1;
-	}
-	Y = -face_ave_pose->point.y + ROBOT_HEIGHT;
-	Z = Y * tan(pointing_pitch);
-	X = x_sign * (Z * tan(pointing_yaw));
-*/
+	   if (pointing_yaw < -(PI/2) && pointing_yaw > -PI)
+	   {
+	   x_sign = 1;
+	   z_sign = 1;
+	   }else if(pointing_yaw > PI/2 && pointing_yaw < PI){
+	   x_sign = 1;
+	   z_sign = 1;
+	   }else if (pointing_yaw > 0){
+	   x_sign = -1;
+	   z_sign = -1;
+	   } else {
+	   x_sign = -1;
+	   z_sign = -1;
+	   }
+	   Y = -face_ave_pose->point.y + ROBOT_HEIGHT;
+	   Z = Y * tan(pointing_pitch);
+	   X = x_sign * (Z * tan(pointing_yaw));
+	 */
 	face_ave_pose->point.y = -face_ave_pose->point.y + ROBOT_HEIGHT;
 	hand_ave_pose->point.y = -hand_ave_pose->point.y + ROBOT_HEIGHT;
 	double x_coeff = (face_ave_pose->point.x - hand_ave_pose->point.x);
@@ -956,9 +957,6 @@ bool PointingGesture::finding_end_point( const geometry_msgs::PointStamped::Ptr&
 	end_point->point.y = 0;
 	end_point->point.z = face_ave_pose->point.z - z_coeff * t;
 	std::cout << "X: " << end_point->point.x << " Z: " << end_point->point.z << std::endl;
-	end_point->point.x = X;
-	end_point->point.y = 0;
-	end_point->point.z = face_ave_pose->point.z + (z_sign) * Z; 
 
 	return true;
 	/*   tf::Quaternion q(quat.x, quat.y, quat.z, quat.w);

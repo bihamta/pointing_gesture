@@ -6,24 +6,8 @@
 
 PointingGesture::PointingGesture(ros::NodeHandle& _nh, ros::NodeHandle& _pnh) : nh(_nh), pnh(_pnh)
 {
-	dbscan = new DBSCAN;
-/*
-	std::vector<Point3*> points;
-	points.push_back(new Point3(1,1,1));
-	points.push_back(new Point3(2,2,2));
-	points.push_back(new Point3(5,5,5));
-	std::vector<DBSCAN::Cluster> clusters = dbscan->dbscan(points, 2., 0);
-	std::cout << points[0]->cluster_id << std::endl;
-	std::cout << points[1]->cluster_id << std::endl;
-	std::cout << points[2]->cluster_id << std::endl;
-	std::cout << std::endl;
-	for (int i = 0; i < clusters.size(); i++) {
-		std::cout << clusters[i].cluster_id << ": " << clusters[i].points.size() << std::endl;
-		for (int j = 0; j < clusters[i].points.size(); j++) {
-			std::cout << clusters[i].points[j]->x << std::endl;
-		}
-	}
-*/
+	dbscan_face = new DBSCAN;
+	dbscan_hand = new DBSCAN;
 
 	imageReceived = false;
 	rgb_nh_.reset(new ros::NodeHandle(nh, "rgb") );
@@ -51,7 +35,6 @@ PointingGesture::PointingGesture(ros::NodeHandle& _nh, ros::NodeHandle& _pnh) : 
 		sync_->registerCallback(boost::bind(&PointingGesture::imageOnlyCb, this, _1, _2, _3));
 	}
 
-
 	// parameter for depth_image_transport hint
 	std::string depth_image_transport_param = "depth_image_transport";
 
@@ -74,14 +57,20 @@ PointingGesture::PointingGesture(ros::NodeHandle& _nh, ros::NodeHandle& _pnh) : 
 	pub_point_cloud_right_hand = output_nh.advertise<PointCloud>("points_right_hand", 5);
 	pub_point_cloud_face = output_nh.advertise<PointCloud>("points_face", 5);
 
-	pub_pose_face = output_nh.advertise<geometry_msgs::PointStamped>("face_ave_pose", 1);
-	pub_pose_right_hand = output_nh.advertise<geometry_msgs::PointStamped>("hand_ave_pose", 1);
+	pub_face_ave_pose = output_nh.advertise<geometry_msgs::PointStamped>("face_ave_pose", 1);
+	pub_hand_ave_pose = output_nh.advertise<geometry_msgs::PointStamped>("hand_ave_pose", 1);
 	pub_end_point = output_nh.advertise<geometry_msgs::PointStamped>("end_point", 1);
 
-	pub_arrow_ave = output_nh.advertise<geometry_msgs::PoseStamped>("arrow_ave", 1);
-	pub_arrow_med = output_nh.advertise<geometry_msgs::PoseStamped>("arrow_med", 1);
-	pub_arrow_closest = output_nh.advertise<geometry_msgs::PoseStamped>("arrow_closest", 1);
-  pub_hand_ave_marker = output_nh.advertise<visualization_msgs::Marker>("hand_ave_marker",1);
+	pub_face_med_pose = output_nh.advertise<geometry_msgs::PointStamped>("face_med_pose", 1);
+	pub_hand_med_pose = output_nh.advertise<geometry_msgs::PointStamped>("hand_med_pose", 1);
+
+	pub_face_cls_pose = output_nh.advertise<geometry_msgs::PointStamped>("face_cls_pose", 1);
+	pub_hand_cls_pose = output_nh.advertise<geometry_msgs::PointStamped>("hand_cls_pose", 1);
+
+	pub_face_ave_dbscan_pose = output_nh.advertise<geometry_msgs::PointStamped>("face_ave_dbscan_pose", 1);
+	pub_hand_ave_dbscan_pose = output_nh.advertise<geometry_msgs::PointStamped>("hand_ave_dbscan_pose", 1);
+
+  	pub_arrowMarker_ave = output_nh.advertise<visualization_msgs::Marker>("hand_ave_marker",1);
 }
 
 void PointingGesture::imageCb(const sensor_msgs::ImageConstPtr& depth_msg,
@@ -392,19 +381,27 @@ void PointingGesture::detectionCb(const yolo2::ImageDetectionsConstPtr& detectio
 	geometry_msgs::PointStamped::Ptr hand_ave_pose (new geometry_msgs::PointStamped);
 	hand_ave_pose->header = depth_msg->header;
 
-	geometry_msgs::PoseStamped::Ptr arrow_ave (new geometry_msgs::PoseStamped);
-	arrow_ave->header = depth_msg->header;
-
-	geometry_msgs::PoseStamped::Ptr arrow_med (new geometry_msgs::PoseStamped);
-	arrow_med->header = depth_msg->header;
-
-	geometry_msgs::PoseStamped::Ptr arrow_closest (new geometry_msgs::PoseStamped);
-	arrow_closest->header = depth_msg->header;
-	
-  geometry_msgs::PointStamped::Ptr end_point (new geometry_msgs::PointStamped);
+  	geometry_msgs::PointStamped::Ptr end_point (new geometry_msgs::PointStamped);
 	end_point->header = depth_msg->header;
 
+	geometry_msgs::PointStamped::Ptr face_med_pose (new geometry_msgs::PointStamped);
+	face_med_pose->header = depth_msg->header;
+	
+	geometry_msgs::PointStamped::Ptr hand_med_pose (new geometry_msgs::PointStamped);
+	hand_med_pose->header = depth_msg->header;
+	
+	geometry_msgs::PointStamped::Ptr face_cls_pose (new geometry_msgs::PointStamped);
+	face_cls_pose->header = depth_msg->header;
+	
+	geometry_msgs::PointStamped::Ptr hand_cls_pose (new geometry_msgs::PointStamped);
+	hand_cls_pose->header = depth_msg->header;
 
+	geometry_msgs::PointStamped::Ptr face_ave_dbscan_pose (new geometry_msgs::PointStamped);
+	face_ave_dbscan_pose->header = depth_msg->header;
+	
+	geometry_msgs::PointStamped::Ptr hand_ave_dbscan_pose (new geometry_msgs::PointStamped);
+	hand_ave_dbscan_pose->header = depth_msg->header;
+	
 	// Allocate new point cloud message
 	PointCloud::Ptr cloud_msg (new PointCloud);
 	cloud_msg->header = depth_msg->header;
@@ -448,11 +445,11 @@ void PointingGesture::detectionCb(const yolo2::ImageDetectionsConstPtr& detectio
 	bool success = false;
 	if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1)
 	{
-		success = convert<uint16_t>(depth_msg, rgb_msg, cloud_msg, cloud_1h, cloud_2h, cloud_f, face_ave_pose, hand_ave_pose, end_point, arrow_ave, arrow_med, arrow_closest, detection_msg, red_offset, green_offset, blue_offset, color_step);
+		success = convert<uint16_t>(depth_msg, rgb_msg, cloud_msg, cloud_1h, cloud_2h, cloud_f, face_ave_pose, hand_ave_pose, end_point, face_med_pose, hand_med_pose, face_cls_pose, hand_cls_pose, face_ave_dbscan_pose, hand_ave_dbscan_pose, detection_msg, red_offset, green_offset, blue_offset, color_step);
 	}
 	else if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_32FC1)
 	{
-		success = convert<float>(depth_msg, rgb_msg, cloud_msg, cloud_1h, cloud_2h, cloud_f, face_ave_pose, hand_ave_pose, end_point, arrow_ave, arrow_med, arrow_closest, detection_msg, red_offset, green_offset, blue_offset, color_step);
+		success = convert<float>(depth_msg, rgb_msg, cloud_msg, cloud_1h, cloud_2h, cloud_f, face_ave_pose, hand_ave_pose, end_point, face_med_pose, hand_med_pose, face_cls_pose, hand_cls_pose, face_ave_dbscan_pose, hand_ave_dbscan_pose, detection_msg, red_offset, green_offset, blue_offset, color_step);
 	}
 	else
 	{
@@ -462,7 +459,7 @@ void PointingGesture::detectionCb(const yolo2::ImageDetectionsConstPtr& detectio
 
 	if (!success)
 	{
-//		ROS_WARN_THROTTLE(1, "Reconstruction of the bounding box failed. Will not publish the object! (Bad depth?)");
+		//ROS_WARN_THROTTLE(1, "Reconstruction of the bounding box failed. Will not publish the object! (Bad depth?)");
 		return;
 	}
 
@@ -471,16 +468,22 @@ void PointingGesture::detectionCb(const yolo2::ImageDetectionsConstPtr& detectio
 	pub_point_cloud_right_hand.publish( cloud_2h );
 	pub_point_cloud_face.publish( cloud_f );
 
-	pub_pose_face.publish(face_ave_pose);
-	pub_pose_right_hand.publish(hand_ave_pose);
-	pub_arrow_ave.publish(arrow_ave);
-	pub_arrow_med.publish(arrow_med);
-  pub_end_point.publish(end_point);
-	// pub_arrow_furthest.publish(arrow_furthest);
+	pub_face_ave_pose.publish(face_ave_pose);
+	pub_hand_ave_pose.publish(hand_ave_pose);
+	pub_end_point.publish(end_point);
+
+	pub_face_med_pose.publish(face_med_pose);
+	pub_hand_med_pose.publish(hand_med_pose);
+
+	pub_face_cls_pose.publish(face_cls_pose);
+	pub_hand_cls_pose.publish(hand_cls_pose);
+
+	pub_face_ave_dbscan_pose.publish(face_ave_dbscan_pose);
+	pub_hand_ave_dbscan_pose.publish(hand_ave_dbscan_pose);
 }
 
 
-template<typename T>
+	template<typename T>
 bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 		const sensor_msgs::ImageConstPtr& rgb_msg,
 		const PointCloud::Ptr& cloud_msg,
@@ -489,10 +492,13 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 		PointCloud::Ptr& cloud_f,
 		const geometry_msgs::PointStamped::Ptr& face_ave_pose,
 		const geometry_msgs::PointStamped::Ptr& hand_ave_pose,
-    const geometry_msgs::PointStamped::Ptr& end_point, 
-		const geometry_msgs::PoseStamped::Ptr& arrow_ave,
-		const geometry_msgs::PoseStamped::Ptr& arrow_med,
-		const geometry_msgs::PoseStamped::Ptr& arrow_closest,
+		const geometry_msgs::PointStamped::Ptr& end_point, 
+		const geometry_msgs::PointStamped::Ptr& face_med_pose,
+		const geometry_msgs::PointStamped::Ptr& hand_med_pose,
+		const geometry_msgs::PointStamped::Ptr& face_cls_pose,
+		const geometry_msgs::PointStamped::Ptr& hand_cls_pose,
+		const geometry_msgs::PointStamped::Ptr& face_ave_dbscan_pose,
+		const geometry_msgs::PointStamped::Ptr& hand_ave_dbscan_pose,
 		const yolo2::ImageDetectionsConstPtr& detection_msg,
 		int red_offset, int green_offset, int blue_offset, int color_step)
 {
@@ -523,7 +529,7 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 	Point3* sum_f_all = new Point3();
 	Point3* sum_1h_all = new Point3();
 	int num_face_all = 0, num_hand_all = 0;	
-	
+
 	std::vector<Point3*> hand_all;
 	std::vector<Point3*> face_all;
 
@@ -553,7 +559,7 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 
 	int all_points = 0;
 	int _pointing_hand_ave_i = -1;
-	
+
 	for (int v = 0; v < int(cloud_msg->height); ++v, depth_row += row_step, rgb += rgb_skip)
 	{
 		for (int u = 0; u < int(cloud_msg->width); ++u, rgb += color_step, ++iter_x, ++iter_y, ++iter_z, ++iter_a, ++iter_r, ++iter_g, ++iter_b)
@@ -569,7 +575,6 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 				{
 					in_bb = true;
 					_class_id = detection_msg.get()->detections[i].class_id;
-					          //ROS_INFO("U and V %d , %d, ---->", u, v);
 
 					if( _class_id == 0 && depth_image_proc::DepthTraits<T>::valid(depth)  )
 					{
@@ -606,8 +611,6 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 								first_hand_points.push_back(new Point3(*iter_x_1h, *iter_y_1h, *iter_z_1h));
 							}
 
-							//	ROS_INFO("%f", *iter_x_f);
-
 							++iter_z_1h;
 							++iter_y_1h;
 							++iter_x_1h;
@@ -631,7 +634,6 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 								second_hand_points.push_back(new Point3(*iter_x_2h, *iter_y_2h, *iter_z_2h));
 							}
 
-							//	ROS_INFO("%f", *iter_x_f);
 
 							++iter_z_2h;
 							++iter_y_2h;
@@ -667,7 +669,6 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 							face_points.push_back(new Point3(*iter_x_f, *iter_y_f, *iter_z_f));
 						}
 
-						//	ROS_INFO("%f", *iter_x_f);
 						++iter_z_f;
 						++iter_y_f;
 						++iter_x_f;
@@ -687,7 +688,7 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 				*iter_y = (v - center_y) * depth * constant_y;
 				*iter_z = depth_image_proc::DepthTraits<T>::toMeters(depth);
 
-				//Class_ID (RightHand = 2, Face = 0, LeftHand = 1)
+				//Class_ID (Hands = 1, Face = 0)
 				*iter_a = _class_id;
 				// Fill in color
 				*iter_r = rgb[red_offset];
@@ -696,10 +697,6 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 			}
 		}
 	}
-
-//	cloud_f->width = cloud_f_width; cloud_f->height = cloud_f_height;
-//	cloud_1h->width = cloud_1h_width; cloud_1h->height = cloud_1h_height;
-//	cloud_2h->width = cloud_2h_width; cloud_2h->height = cloud_2h_height;
 
 	if(!all_points) return false;
 
@@ -718,7 +715,7 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 	Point3* second_hand_points_ave = new Point3( sum_2h->x/num_second_hand, sum_2h->y/num_second_hand, sum_2h->z/num_second_hand );
 	pointing_hand_ave = first_hand_points_ave;
 
-	// Visualize
+	// Filling poses
 	face_ave_pose->point.x = face_points_ave->x;
 	face_ave_pose->point.y = face_points_ave->y;
 	face_ave_pose->point.z = face_points_ave->z;
@@ -726,9 +723,10 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 	hand_ave_pose->point.x = pointing_hand_ave->x;
 	hand_ave_pose->point.y = pointing_hand_ave->y;
 	hand_ave_pose->point.z = pointing_hand_ave->z;
-  
-  finding_end_point( hand_ave_pose, face_ave_pose, end_point);
 
+	finding_end_point( hand_ave_pose, face_ave_pose, end_point);
+	/*
+	////Finding Angle
 	roll_ave = 0;
 	pitch_ave = atan2((pointing_hand_ave->x - face_points_ave->x), (pointing_hand_ave->z - face_points_ave->z)) - PI/2;
 	// yaw_ave = -atan2(sqrt(pow(pointing_hand_ave_Z - sumZ_f, 2) + pow(pointing_hand_ave_X - sumX_f, 2)), pointing_hand_ave_Y - sumY_f) + PI/2; 
@@ -738,14 +736,7 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 	// -atan2(fabs(pointing_hand_ave_X - sumX_f), (pointing_hand_ave_Y - sumY_f)) + PI/2;
 
 	tf::Quaternion arrow_angle_ave = tf::createQuaternionFromRPY(roll_ave, pitch_ave, yaw_ave);
-
-	arrow_ave->pose.position.x = face_points_ave->x;
-	arrow_ave->pose.position.y = face_points_ave->y;
-	arrow_ave->pose.position.z = face_points_ave->z;
-	arrow_ave->pose.orientation.x = arrow_angle_ave.getX();
-	arrow_ave->pose.orientation.y = arrow_angle_ave.getY();
-	arrow_ave->pose.orientation.z = arrow_angle_ave.getZ();
-	arrow_ave->pose.orientation.w = arrow_angle_ave.getW();
+	 */
 
 	//Closest Point
 	Point3* closest_point_hand = NULL;
@@ -761,8 +752,8 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 			}
 		}
 	} else {
-    return false;
-  }
+		return false;
+	}
 
 	//  Closest point to the camera in Pointing FACE
 	if(face_points.size() > 0 ) {
@@ -774,24 +765,35 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 			}
 		}
 	} else {
-    return false;
-  }
-
-	if (first_hand_points.size() > 0){
-		roll_closest = 0;
-		pitch_closest = atan2((closest_point_hand->x - closest_point_face->x), ( closest_point_hand->z - closest_point_face->z)) - PI/2;
-		yaw_closest = 0;
-
-		tf::Quaternion arrow_angle_closest = tf::createQuaternionFromRPY(roll_closest , pitch_closest, yaw_closest);
-
-		arrow_closest->pose.position.x = closest_point_face->x;
-		arrow_closest->pose.position.y = closest_point_face->y;
-		arrow_closest->pose.position.z = closest_point_face->z;
-		arrow_closest->pose.orientation.x = arrow_angle_closest.getX();
-		arrow_closest->pose.orientation.y = arrow_angle_closest.getY();
-		arrow_closest->pose.orientation.z = arrow_angle_closest.getZ();
-		arrow_closest->pose.orientation.w = arrow_angle_closest.getW();
+		return false;
 	}
+	///Filling Poses
+	face_cls_pose->point.x = closest_point_face->x;
+	face_cls_pose->point.y = closest_point_face->y;
+	face_cls_pose->point.z = closest_point_face->z;
+
+	hand_cls_pose->point.x = closest_point_hand->x;
+	hand_cls_pose->point.y = closest_point_hand->y;
+	hand_cls_pose->point.z = closest_point_hand->z;
+
+	/*
+	////Finding Angle
+	if (first_hand_points.size() > 0){
+	roll_closest = 0;
+	pitch_closest = atan2((closest_point_hand->x - closest_point_face->x), ( closest_point_hand->z - closest_point_face->z)) - PI/2;
+	yaw_closest = 0;
+
+	tf::Quaternion arrow_angle_closest = tf::createQuaternionFromRPY(roll_closest , pitch_closest, yaw_closest);
+
+	arrow_closest->pose.position.x = closest_point_face->x;
+	arrow_closest->pose.position.y = closest_point_face->y;
+	arrow_closest->pose.position.z = closest_point_face->z;
+	arrow_closest->pose.orientation.x = arrow_angle_closest.getX();
+	arrow_closest->pose.orientation.y = arrow_angle_closest.getY();
+	arrow_closest->pose.orientation.z = arrow_angle_closest.getZ();
+	arrow_closest->pose.orientation.w = arrow_angle_closest.getW();
+	}
+	 */
 
 	//Median Point
 	Point3* face_point_med = NULL;
@@ -799,13 +801,23 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 	if (first_hand_points.size() > 0) {
 		hand_point_med = points_median(first_hand_points); 
 	} else {
-    return false;
-  }
+		return false;
+	}
 	if (face_points.size() > 0 ) {
 		face_point_med = points_median(face_points);
 	} else {
-    return false;
-  }
+		return false;
+	}
+	//Filling Poses	
+	face_med_pose->point.x = face_point_med->x;
+	face_med_pose->point.y = face_point_med->y;
+	face_med_pose->point.z = face_point_med->z;
+
+	hand_med_pose->point.x = hand_point_med->x;
+	hand_med_pose->point.y = hand_point_med->y;
+	hand_med_pose->point.z = hand_point_med->z;
+	/* 
+	////Finding Angle
 	roll_med = 0;
 	pitch_med = atan2(hand_point_med->x - face_point_med->x, hand_point_med->z - face_point_med->z) - PI/2;
 	yaw_med =0;
@@ -819,144 +831,132 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 	arrow_med->pose.orientation.y = arrow_angle_med.getY();
 	arrow_med->pose.orientation.z = arrow_angle_med.getZ();
 	arrow_med->pose.orientation.w = arrow_angle_med.getW();
+	 */
+	visualization_msgs::Marker::Ptr arrowMarker_ave (new visualization_msgs::Marker);
+	arrowMarker_ave->header = depth_msg->header;
+	arrowMarker_ave->type = visualization_msgs::Marker::ARROW;
+	arrowMarker_ave->action = visualization_msgs::Marker::ADD;
+	arrowMarker_ave->color.a = 1.0;
+	arrowMarker_ave->scale.x = 0.01;
+	arrowMarker_ave->scale.y = 0.1;
+	arrowMarker_ave->scale.z = 0.1;
 
-  visualization_msgs::Marker::Ptr arrowMarker_ave (new visualization_msgs::Marker);
-  arrowMarker_ave->header = depth_msg->header;
-  arrowMarker_ave->type = visualization_msgs::Marker::ARROW;
-  arrowMarker_ave->action = visualization_msgs::Marker::ADD;
-  arrowMarker_ave->color.a = 1.0;
-  arrowMarker_ave->scale.x = 0.01;
-  arrowMarker_ave->scale.y = 0.1;
-  arrowMarker_ave->scale.z = 0.1;
+	arrowMarker_ave->points.resize(2);
+	arrowMarker_ave->points[0].x = face_points_ave->x;
+	arrowMarker_ave->points[0].y = face_points_ave->y;
+	arrowMarker_ave->points[0].z = face_points_ave->z;
 
-  arrowMarker_ave->points.resize(2);
-  arrowMarker_ave->points[0].x = face_points_ave->x;
-  arrowMarker_ave->points[0].y = face_points_ave->y;
-  arrowMarker_ave->points[0].z = face_points_ave->z;
+	arrowMarker_ave->points[1].x = pointing_hand_ave->x;
+	arrowMarker_ave->points[1].y = pointing_hand_ave->y;
+	arrowMarker_ave->points[1].z = pointing_hand_ave->z;
 
-  arrowMarker_ave->points[1].x = pointing_hand_ave->x;
-  arrowMarker_ave->points[1].y = pointing_hand_ave->y;
-  arrowMarker_ave->points[1].z = pointing_hand_ave->z;
-  
-  arrowMarker_ave->colors.resize(2);
-  arrowMarker_ave->colors[0].r = 1;
-  arrowMarker_ave->colors[0].g = 0;
-  arrowMarker_ave->colors[0].b = 0;
-  arrowMarker_ave->colors[0].a = 1;
+	arrowMarker_ave->colors.resize(2);
+	arrowMarker_ave->colors[0].r = 1;
+	arrowMarker_ave->colors[0].g = 0;
+	arrowMarker_ave->colors[0].b = 0;
+	arrowMarker_ave->colors[0].a = 1;
 
-  arrowMarker_ave->colors[1].r = 1;
-  arrowMarker_ave->colors[1].g = 0;
-  arrowMarker_ave->colors[1].b = 0;
-  arrowMarker_ave->colors[1].a = 1;
+	arrowMarker_ave->colors[1].r = 1;
+	arrowMarker_ave->colors[1].g = 0;
+	arrowMarker_ave->colors[1].b = 0;
+	arrowMarker_ave->colors[1].a = 1;
 
-	pub_hand_ave_marker.publish(arrowMarker_ave);
-
+	pub_arrowMarker_ave.publish(arrowMarker_ave);
+	
 	// Clustering
-	//std::cout << "start clustering with " << face_all.size() << " " << face_points.size() << std::endl;
-	std::vector<DBSCAN::Cluster> clusters = dbscan->cluster(face_all, EPSILON, MIN_POINTS);
-	//std::cout << "end clustering" << std::endl;
+	int cluster_max_face = 0, cluster_max_face_index = 0;
+	int cluster_max_hand = 0, cluster_max_hand_index = 0;
+	Point3* face_ave_dbscan = new Point3();
+	Point3* hand_ave_dbscan = new Point3();
+	std::vector<DBSCAN::Cluster> clusters_face = dbscan_face->cluster(face_all, EPSILON, MIN_POINTS);
+	std::vector<DBSCAN::Cluster> clusters_hand = dbscan_hand->cluster(hand_all, EPSILON, MIN_POINTS);
 
-	for (int i = 0; i < clusters.size(); i++) {
-//		std::cout << clusters[i].cluster_id << ": " << clusters[i].points.size() << std::endl;
-//		for (int j = 0; j < clusters[i].points.size(); j++) {
-//			std::cout << clusters[i].points[j]->x << std::endl;
-//		}
+	for (int i = 0; i < clusters_face.size(); i++) {
+		if (clusters_face[i].points.size() > cluster_max_face) {
+			cluster_max_face = clusters_face[i].points.size();
+			cluster_max_face_index = i;
+		}
 	}
+	for (int j = 0; j < cluster_max_face; j++) {
+		face_ave_dbscan->x += clusters_face[cluster_max_face_index].points[j]->x / j;
+		face_ave_dbscan->y += clusters_face[cluster_max_face_index].points[j]->y / j;
+		face_ave_dbscan->z += clusters_face[cluster_max_face_index].points[j]->z / j;
+	}
+	for (int k = 0; k < clusters_hand.size(); k++) {
+		if (clusters_hand[k].points.size() > cluster_max_hand) {
+			cluster_max_hand = clusters_hand[k].points.size();
+			cluster_max_hand_index = k;
+		}
+	}
+	for (int l = 0; l < cluster_max_hand; l++) {
+		hand_ave_dbscan->x += clusters_hand[cluster_max_hand_index].points[l]->x / l;
+		hand_ave_dbscan->y += clusters_hand[cluster_max_hand_index].points[l]->y / l;
+		hand_ave_dbscan->z += clusters_hand[cluster_max_hand_index].points[l]->z / l;
+	}
+	//Filling Poses	
+	face_ave_dbscan_pose->point.x = face_ave_dbscan->x;
+	face_ave_dbscan_pose->point.y = face_ave_dbscan->y;
+	face_ave_dbscan_pose->point.z = face_ave_dbscan->z;
 
-/*	//Mean Point
-	//Point3* pointing_hand_ave;
-
-	//  Average point of FACE and HANDS 
-	Point3* face_points_ave = new Point3( sum_f->x/num_face, sum_f->y/num_face, sum_f->z/num_face );
-	Point3* first_hand_points_ave = new Point3( sum_1h->x/num_first_hand, sum_1h->y/num_first_hand, sum_1h->z/num_first_hand );
-	Point3* second_hand_points_ave = new Point3( sum_2h->x/num_second_hand, sum_2h->y/num_second_hand, sum_2h->z/num_second_hand );
-	pointing_hand_ave = first_hand_points_ave;
-
-	// Visualize
-	face_ave_pose->point.x = face_points_ave->x;
-	face_ave_pose->point.y = face_points_ave->y;
-	face_ave_pose->point.z = face_points_ave->z;
-
-	hand_ave_marker->point.x = pointing_hand_ave->x;
-	hand_ave_marker->point.y = pointing_hand_ave->y;
-	hand_ave_marker->point.z = pointing_hand_ave->z;
-
-	roll_ave = 0;
-	pitch_ave = atan2((pointing_hand_ave->x - face_points_ave->x), (pointing_hand_ave->z - face_points_ave->z)) - PI/2;
-	// yaw_ave = -atan2(sqrt(pow(pointing_hand_ave_Z - sumZ_f, 2) + pow(pointing_hand_ave_X - sumX_f, 2)), pointing_hand_ave_Y - sumY_f) + PI/2; 
-	// -atan2(fabs(pointing_hand_ave_X - sumX_f), (pointing_hand_ave_Y - sumY_f)) + PI/2;
-	int sign = (pointing_hand_ave->x > face_points_ave->x) ? -1 : 1;
-	yaw_ave = sign * (atan2(sqrt(pow(pointing_hand_ave->z - face_points_ave->z, 2) + pow(pointing_hand_ave->x - face_points_ave->x, 2)), pointing_hand_ave->y - face_points_ave->y) - PI/2); 
-	// -atan2(fabs(pointing_hand_ave_X - sumX_f), (pointing_hand_ave_Y - sumY_f)) + PI/2;
-
-	tf::Quaternion arrow_angle_ave = tf::createQuaternionFromRPY(roll_ave, pitch_ave, yaw_ave);
-
-	arrow_ave->pose.position.x = face_points_ave->x;
-	arrow_ave->pose.position.y = face_points_ave->y;
-	arrow_ave->pose.position.z = face_points_ave->z;
-	arrow_ave->pose.orientation.x = arrow_angle_ave.getX();
-	arrow_ave->pose.orientation.y = arrow_angle_ave.getY();
-	arrow_ave->pose.orientation.z = arrow_angle_ave.getZ();
-	arrow_ave->pose.orientation.w = arrow_angle_ave.getW();
-*/
-
+	hand_ave_dbscan_pose->point.x = hand_ave_dbscan->x;
+	hand_ave_dbscan_pose->point.y = hand_ave_dbscan->y;
+	hand_ave_dbscan_pose->point.z = hand_ave_dbscan->z;
 
 	return true;
-}
 
+}
 Point3* PointingGesture::points_median(std::vector<Point3*> &v)
 {
-    size_t n = v.size() / 2;
-    nth_element(v.begin(), v.begin()+n, v.end());
-//    ROS_INFO("v: %f", v[n]);
-    return v[n];
+	size_t n = v.size() / 2;
+	nth_element(v.begin(), v.begin()+n, v.end());
+	return v[n];
 }
 
 bool PointingGesture::finding_end_point( const geometry_msgs::PointStamped::Ptr& hand_ave_pose, 
-                                 const geometry_msgs::PointStamped::Ptr& face_ave_pose, 
-                                 const geometry_msgs::PointStamped::Ptr& end_point) 
+		const geometry_msgs::PointStamped::Ptr& face_ave_pose, 
+		const geometry_msgs::PointStamped::Ptr& end_point) 
 {
-   float pointing_yaw = 0;
-   float pointing_roll = 0;
-   float pointing_pitch = 0;
-   int x_sign = -1, z_sign = +1;
+	float pointing_yaw = 0;
+	float pointing_roll = 0;
+	float pointing_pitch = 0;
+	int x_sign = -1, z_sign = +1;
 
-   pointing_yaw = atan2(face_ave_pose->point.x - hand_ave_pose->point.x, face_ave_pose->point.z - hand_ave_pose->point.z);
+	pointing_yaw = atan2(face_ave_pose->point.x - hand_ave_pose->point.x, face_ave_pose->point.z - hand_ave_pose->point.z);
 
-   pointing_pitch = PI/2 - ((atan2(sqrt(pow(face_ave_pose->point.x - hand_ave_pose->point.x, 2) + pow(face_ave_pose->point.z - hand_ave_pose->point.z, 2)), face_ave_pose->point.y - hand_ave_pose->point.y) - PI/2 ));
+	pointing_pitch = PI/2 - ((atan2(sqrt(pow(face_ave_pose->point.x - hand_ave_pose->point.x, 2) + pow(face_ave_pose->point.z - hand_ave_pose->point.z, 2)), face_ave_pose->point.y - hand_ave_pose->point.y) - PI/2 ));
 
-   std::cout << "Pitch: "<< pointing_pitch * (180/PI) << "Yaw: " << pointing_yaw * (180/PI) << std::endl; 
-  float Y = 0, X = 0, Z = 0; //Y is Height and Z is Depth ( assumption )
-  
-  if (pointing_yaw < -90 && pointing_yaw > -180)
-  {
-    x_sign = -1;
-    z_sign = -1;
-  }else if(pointing_yaw > 90 && pointing_yaw < 180){
-    x_sign = 1;
-    z_sign = -1;
-  }else if (pointing_yaw > 0){
-    x_sign = -1;
-    z_sign = -1;
-  } else {
-    x_sign = 1;
-    z_sign = -1;
-  }
-  Y = -face_ave_pose->point.y + ROBOT_HEIGHT;
-  Z = Y * tan(pointing_pitch);
-  X = x_sign * (Z * tan(pointing_yaw));
-//  X = 0;
-  //std::cout << tan(45) << std::endl; 
-  std::cout << "X: " << X << "Y: " << Y << "Z: " << Z << std::endl;
-  end_point->point.x = X;
-  end_point->point.y = 0;
-  end_point->point.z = face_ave_pose->point.z + (z_sign) * Z; 
+	std::cout << "Pitch: "<< pointing_pitch * (180/PI) << "Yaw: " << pointing_yaw * (180/PI) << std::endl; 
+	float Y = 0, X = 0, Z = 0; //Y is Height and Z is Depth ( assumption )
 
-  return true;
-/*   tf::Quaternion q(quat.x, quat.y, quat.z, quat.w);
-   tf::Matrix3x3 m(q);
-   double roll, pitch, yaw;
-   m.getRPY(roll, pitch, yaw);
-   std::cout << "Roll: " << roll << ", Pitch: " << pitch << ", Yaw: " << yaw << std::endl;
-*/
+	if (pointing_yaw < -90 && pointing_yaw > -180)
+	{
+		x_sign = -1;
+		z_sign = -1;
+	}else if(pointing_yaw > 90 && pointing_yaw < 180){
+		x_sign = 1;
+		z_sign = -1;
+	}else if (pointing_yaw > 0){
+		x_sign = -1;
+		z_sign = -1;
+	} else {
+		x_sign = 1;
+		z_sign = -1;
+	}
+	Y = -face_ave_pose->point.y + ROBOT_HEIGHT;
+	Z = Y * tan(pointing_pitch);
+	X = x_sign * (Z * tan(pointing_yaw));
+	//  X = 0;
+	//std::cout << tan(45) << std::endl; 
+	std::cout << "X: " << X << "Y: " << Y << "Z: " << Z << std::endl;
+	end_point->point.x = X;
+	end_point->point.y = 0;
+	end_point->point.z = face_ave_pose->point.z + (z_sign) * Z; 
+
+	return true;
+	/*   tf::Quaternion q(quat.x, quat.y, quat.z, quat.w);
+	     tf::Matrix3x3 m(q);
+	     double roll, pitch, yaw;
+	     m.getRPY(roll, pitch, yaw);
+	     std::cout << "Roll: " << roll << ", Pitch: " << pitch << ", Yaw: " << yaw << std::endl;
+	 */
 }

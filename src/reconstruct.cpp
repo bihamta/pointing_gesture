@@ -32,12 +32,12 @@
 #include <pcl/filters/median_filter.h>
 #include <tf/transform_datatypes.h>
 #include <math.h>
-#include "nabo/nabo.h"
+//#include "nabo/nabo.h"
 #define PI 3.14159265
 
 using namespace message_filters::sync_policies;
 // using namespace cv;
-using namespace Nabo;
+//using namespace Nabo;
 using namespace Eigen;
 
 static const std::string OPENCV_WINDOW = "Image window";

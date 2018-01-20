@@ -62,27 +62,30 @@ class PointingGesture
 		void detectionCb(const yolo2::ImageDetectionsConstPtr &detection_msg);
 
 		template<typename T>
-		bool convert(const sensor_msgs::ImageConstPtr& depth_msg,
-				const sensor_msgs::ImageConstPtr& rgb_msg,
-				const PointCloud::Ptr& cloud_msg,
-				PointCloud::Ptr& cloud_1h,
-				PointCloud::Ptr& cloud_2h,
-				PointCloud::Ptr& cloud_f,
-				const geometry_msgs::PointStamped::Ptr& face_ave_pose,
-				const geometry_msgs::PointStamped::Ptr& hand_ave_pose,
-        const geometry_msgs::PointStamped::Ptr& end_point,
-				const geometry_msgs::PoseStamped::Ptr& arrow_ave,
-				const geometry_msgs::PoseStamped::Ptr& arrow_med,
-				const geometry_msgs::PoseStamped::Ptr& arrow_closest,
-				const yolo2::ImageDetectionsConstPtr& detection_msg,
-				int red_offset, int green_offset, int blue_offset, int color_step);
+			bool convert(const sensor_msgs::ImageConstPtr& depth_msg,
+					const sensor_msgs::ImageConstPtr& rgb_msg,
+					const PointCloud::Ptr& cloud_msg,
+					PointCloud::Ptr& cloud_1h,
+					PointCloud::Ptr& cloud_2h,
+					PointCloud::Ptr& cloud_f,
+					const geometry_msgs::PointStamped::Ptr& face_ave_pose,
+					const geometry_msgs::PointStamped::Ptr& hand_ave_pose,
+					const geometry_msgs::PointStamped::Ptr& end_point,
+					const geometry_msgs::PointStamped::Ptr& face_med_pose,
+					const geometry_msgs::PointStamped::Ptr& hand_med_pose,
+					const geometry_msgs::PointStamped::Ptr& face_cls_pose,
+					const geometry_msgs::PointStamped::Ptr& hand_cls_pose,
+					const geometry_msgs::PointStamped::Ptr& face_ave_dbscan_pose,
+					const geometry_msgs::PointStamped::Ptr& hand_ave_dbscan_pose,
+					const yolo2::ImageDetectionsConstPtr& detection_msg,
+					int red_offset, int green_offset, int blue_offset, int color_step);
 
 		Point3* points_median(std::vector<Point3*> &v);
 
-    bool finding_end_point(
+		bool finding_end_point(
 				const geometry_msgs::PointStamped::Ptr& hand_ave_pose,
 				const geometry_msgs::PointStamped::Ptr& face_ave_pose,
-        const geometry_msgs::PointStamped::Ptr& end_point); 
+				const geometry_msgs::PointStamped::Ptr& end_point); 
 
 	protected:
 		ros::NodeHandle nh;
@@ -114,18 +117,19 @@ class PointingGesture
 		ros::Publisher pub_point_cloud_right_hand;
 		ros::Publisher pub_point_cloud_left_hand;
 		ros::Publisher pub_point_cloud_face;
-		ros::Publisher pub_pose_right_hand;
+		ros::Publisher pub_hand_ave_pose;
+		ros::Publisher pub_face_ave_pose;
 		ros::Publisher pub_end_point;
-		ros::Publisher pub_pose_face;
-		ros::Publisher pub_arrow_ave;
-		ros::Publisher pub_arrow_med;
-		ros::Publisher pub_arrow_closest;
-		ros::Publisher pub_point_med;
-		ros::Publisher pub_point_ave;
-		ros::Publisher pub_face_ave_marker;
-		ros::Publisher pub_hand_ave_marker;
+		ros::Publisher pub_face_med_pose;
+		ros::Publisher pub_hand_med_pose;
+		ros::Publisher pub_face_cls_pose;
+		ros::Publisher pub_hand_cls_pose;
+		ros::Publisher pub_face_ave_dbscan_pose;
+		ros::Publisher pub_hand_ave_dbscan_pose;
+		ros::Publisher pub_arrowMarker_ave;
 
 		image_geometry::PinholeCameraModel model_;
 
-		DBSCAN* dbscan;
+		DBSCAN* dbscan_face;
+		DBSCAN* dbscan_hand;
 };

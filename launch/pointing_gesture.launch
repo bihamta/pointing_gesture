@@ -15,10 +15,10 @@
 	<remap to  ="/vision/yolo2/detections" 
 		from="detections" />
 
+
 <!--
-	<node name="pointing_gesture" output="screen" pkg="hands_3d" type="pointing_gesture"  launch-prefix="xterm -e gdb - -args"> -->
-
+	<node name="pointing_gesture" output="screen" pkg="hands_3d" type="pointing_gesture"  launch-prefix="xterm -e gdb - -args"> 
+-->
 	<node name="pointing_gesture" output="screen" pkg="hands_3d" type="pointing_gesture">
-
 	</node>
 </launch>

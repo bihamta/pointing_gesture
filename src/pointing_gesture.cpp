@@ -871,37 +871,38 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 		Point3* hand_ave_dbscan = new Point3();
 		std::vector<DBSCAN::Cluster> clusters_face = dbscan_face->cluster(face_all, EPSILON, MIN_POINTS);
 		std::vector<DBSCAN::Cluster> clusters_hand = dbscan_hand->cluster(hand_all, EPSILON, MIN_POINTS);
-
-		for (int i = 0; i < clusters_face.size(); i++) {
-			if (clusters_face[i].points.size() > cluster_max_face) {
-				cluster_max_face = clusters_face[i].points.size();
-				cluster_max_face_index = i;
+		if (clusters_face.size() > 0 && clusters_hand.size() > 0 ){
+			for (int i = 0; i < clusters_face.size(); i++) {
+				if (clusters_face[i].points.size() > cluster_max_face) {
+					cluster_max_face = clusters_face[i].points.size();
+					cluster_max_face_index = i;
+				}
 			}
-		}
-		for (int j = 1; j <= cluster_max_face; j++) {
-			face_ave_dbscan->x += clusters_face[cluster_max_face_index].points[j]->x / j;
-			face_ave_dbscan->y += clusters_face[cluster_max_face_index].points[j]->y / j;
-			face_ave_dbscan->z += clusters_face[cluster_max_face_index].points[j]->z / j;
-		}
-		for (int k = 0; k < clusters_hand.size(); k++) {
-			if (clusters_hand[k].points.size() > cluster_max_hand) {
-				cluster_max_hand = clusters_hand[k].points.size();
-				cluster_max_hand_index = k;
+			for (int j = 0; j < cluster_max_face; j++) {
+				face_ave_dbscan->x += clusters_face[cluster_max_face_index].points[j]->x / ( j + 1 );
+				face_ave_dbscan->y += clusters_face[cluster_max_face_index].points[j]->y / ( j + 1 );
+				face_ave_dbscan->z += clusters_face[cluster_max_face_index].points[j]->z / ( j + 1);
 			}
-		}
-		for (int l = 1; l <= cluster_max_hand; l++) {
-			hand_ave_dbscan->x += clusters_hand[cluster_max_hand_index].points[l]->x / l;
-			hand_ave_dbscan->y += clusters_hand[cluster_max_hand_index].points[l]->y / l;
-			hand_ave_dbscan->z += clusters_hand[cluster_max_hand_index].points[l]->z / l;
-		}
-		//Filling Poses	
-		face_ave_dbscan_pose->point.x = face_ave_dbscan->x;
-		face_ave_dbscan_pose->point.y = face_ave_dbscan->y;
-		face_ave_dbscan_pose->point.z = face_ave_dbscan->z;
+			for (int k = 0; k < clusters_hand.size(); k++) {
+				if (clusters_hand[k].points.size() > cluster_max_hand) {
+					cluster_max_hand = clusters_hand[k].points.size();
+					cluster_max_hand_index = k;
+				}
+			}
+			for (int l = 0; l < cluster_max_hand; l++) {
+				hand_ave_dbscan->x += clusters_hand[cluster_max_hand_index].points[l]->x / ( l + 1 );
+				hand_ave_dbscan->y += clusters_hand[cluster_max_hand_index].points[l]->y / ( l + 1 );
+				hand_ave_dbscan->z += clusters_hand[cluster_max_hand_index].points[l]->z / ( l + 1 );
+			}
+			//Filling Poses	
+			face_ave_dbscan_pose->point.x = face_ave_dbscan->x;
+			face_ave_dbscan_pose->point.y = face_ave_dbscan->y;
+			face_ave_dbscan_pose->point.z = face_ave_dbscan->z;
 
-		hand_ave_dbscan_pose->point.x = hand_ave_dbscan->x;
-		hand_ave_dbscan_pose->point.y = hand_ave_dbscan->y;
-		hand_ave_dbscan_pose->point.z = hand_ave_dbscan->z;
+			hand_ave_dbscan_pose->point.x = hand_ave_dbscan->x;
+			hand_ave_dbscan_pose->point.y = hand_ave_dbscan->y;
+			hand_ave_dbscan_pose->point.z = hand_ave_dbscan->z;
+		}
 	}
 	return true;
 
@@ -947,10 +948,12 @@ bool PointingGesture::finding_end_point( const geometry_msgs::PointStamped::Ptr&
 	   Z = Y * tan(pointing_pitch);
 	   X = x_sign * (Z * tan(pointing_yaw));
 	 */
-	face_ave_pose->point.y = -face_ave_pose->point.y + ROBOT_HEIGHT;
-	hand_ave_pose->point.y = -hand_ave_pose->point.y + ROBOT_HEIGHT;
+	double real_y_face = 0, real_y_hand = 0;
+	
+	real_y_face = -face_ave_pose->point.y + ROBOT_HEIGHT;
+	real_y_hand= -hand_ave_pose->point.y + ROBOT_HEIGHT;
 	double x_coeff = (face_ave_pose->point.x - hand_ave_pose->point.x);
-	double y_coeff = (face_ave_pose->point.y - hand_ave_pose->point.y);
+	double y_coeff = (real_y_face - real_y_hand);
 	double z_coeff = (face_ave_pose->point.z - hand_ave_pose->point.z);
 	double t = face_ave_pose->point.y / y_coeff;
 	end_point->point.x = face_ave_pose->point.x - x_coeff * t;

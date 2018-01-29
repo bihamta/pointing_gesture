@@ -70,6 +70,11 @@ def vicon_camera_callback(data):
 
 def vicon_glove_callback(data):
     global glove, glass, hand_ave, face_ave, summ, counter, cam_roll, cam_pitch, cam_yaw
+    if camera == None:
+      return 
+    if glass == None:
+      return
+
     glove = data
 #    sum = 0
 #    counter = 0
@@ -131,14 +136,23 @@ def vicon_glove_callback(data):
 
     face_ave_dbscan_pitch_rad = math.atan2(math.sqrt(math.pow(face_ave_dbscan.point.x - hand_ave_dbscan.point.x, 2) + math.pow(face_ave_dbscan.point.z - hand_ave_dbscan.point.z, 2)), face_ave_dbscan.point.y - hand_ave_dbscan.point.y) - math.pi/2
     face_ave_dbscan_pitch_deg = math.degrees(face_ave_dbscan_pitch_rad)
+    
 
-    print "Vicon Yaw: " , vicon_yaw_deg, "Vicon Pitch: " , vicon_pitch_deg
-    print "Yaw Average: " , face_ave_yaw_deg, "Pitch Average: " , face_ave_pitch_deg 
-    print "Yaw Median: " , face_med_yaw_deg, "Pitch Median: " , face_med_pitch_deg 
-    print "Yaw Closest: " , face_cls_yaw_deg, "Pitch Closest: " , face_cls_pitch_deg 
-    print "Yaw Average DBSCAN: " , face_ave_dbscan_yaw_deg, "Pitch Average DBSCAN: " , face_ave_dbscan_pitch_deg 
-    print "----------------------------------------------------------------------"
-    print " "
+    if math.fabs(vicon_pitch_deg - face_ave_pitch_deg) < 5:
+      #print "Vicon Yaw: " , vicon_yaw_deg, "Vicon Pitch: " , vicon_pitch_deg
+      #print "Yaw Average: " , face_ave_yaw_deg, "Pitch Average: " , face_ave_pitch_deg 
+      #print "Yaw Median: " , face_med_yaw_deg, "Pitch Median: " , face_med_pitch_deg 
+      #print "Yaw Closest: " , face_cls_yaw_deg, "Pitch Closest: " , face_cls_pitch_deg 
+      #print "Yaw Average DBSCAN: " , face_ave_dbscan_yaw_deg, "Pitch Average DBSCAN: " , face_ave_dbscan_pitch_deg 
+      #print "----------------------------------------------------------------------"
+      #print " "
+      print "Vicon Yaw: " , vicon_yaw_deg, "Vicon Pitch: " , vicon_pitch_deg
+      print "Yaw Average: " , math.fabs(face_ave_yaw_deg - vicon_yaw_deg), "Pitch Average: " , math.fabs(face_ave_pitch_deg - vicon_pitch_deg) 
+      print "Yaw Median: " ,  math.fabs(face_med_yaw_deg - vicon_yaw_deg), "Pitch Median: " , math.fabs(face_med_pitch_deg - vicon_pitch_deg)
+      print "Yaw Closest: " , math.fabs(face_cls_yaw_deg - vicon_yaw_deg), "Pitch Closest: " , math.fabs(face_cls_pitch_deg - vicon_pitch_deg)
+      print "Yaw Average DBSCAN: " , math.fabs(face_ave_dbscan_yaw_deg -  vicon_yaw_deg), "Pitch Average DBSCAN: " , math.fabs(face_ave_dbscan_pitch_deg - vicon_pitch_deg)
+      print "----------------------------------------------------------------------"
+      print " "
 #    face_rad = math.atan2(face.point.x - hand.point.x, face.point.z - hand.point.z)
 #    face_deg = math.degrees(face_rad)
 

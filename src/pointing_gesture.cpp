@@ -879,9 +879,9 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 				}
 			}
 			for (int j = 0; j < cluster_max_face; j++) {
-				face_ave_dbscan->x += clusters_face[cluster_max_face_index].points[j]->x / ( j + 1 );
-				face_ave_dbscan->y += clusters_face[cluster_max_face_index].points[j]->y / ( j + 1 );
-				face_ave_dbscan->z += clusters_face[cluster_max_face_index].points[j]->z / ( j + 1);
+				face_ave_dbscan->x += clusters_face[cluster_max_face_index].points[j]->x;
+				face_ave_dbscan->y += clusters_face[cluster_max_face_index].points[j]->y;
+				face_ave_dbscan->z += clusters_face[cluster_max_face_index].points[j]->z;
 			}
 			for (int k = 0; k < clusters_hand.size(); k++) {
 				if (clusters_hand[k].points.size() > cluster_max_hand) {
@@ -890,18 +890,18 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 				}
 			}
 			for (int l = 0; l < cluster_max_hand; l++) {
-				hand_ave_dbscan->x += clusters_hand[cluster_max_hand_index].points[l]->x / ( l + 1 );
-				hand_ave_dbscan->y += clusters_hand[cluster_max_hand_index].points[l]->y / ( l + 1 );
-				hand_ave_dbscan->z += clusters_hand[cluster_max_hand_index].points[l]->z / ( l + 1 );
+				hand_ave_dbscan->x += clusters_hand[cluster_max_hand_index].points[l]->x;
+				hand_ave_dbscan->y += clusters_hand[cluster_max_hand_index].points[l]->y;
+				hand_ave_dbscan->z += clusters_hand[cluster_max_hand_index].points[l]->z;
 			}
 			//Filling Poses	
-			face_ave_dbscan_pose->point.x = face_ave_dbscan->x;
-			face_ave_dbscan_pose->point.y = face_ave_dbscan->y;
-			face_ave_dbscan_pose->point.z = face_ave_dbscan->z;
+			face_ave_dbscan_pose->point.x = face_ave_dbscan->x / cluster_max_face;
+			face_ave_dbscan_pose->point.y = face_ave_dbscan->y / cluster_max_face;
+			face_ave_dbscan_pose->point.z = face_ave_dbscan->z / cluster_max_face;
 
-			hand_ave_dbscan_pose->point.x = hand_ave_dbscan->x;
-			hand_ave_dbscan_pose->point.y = hand_ave_dbscan->y;
-			hand_ave_dbscan_pose->point.z = hand_ave_dbscan->z;
+			hand_ave_dbscan_pose->point.x = hand_ave_dbscan->x / cluster_max_hand;
+			hand_ave_dbscan_pose->point.y = hand_ave_dbscan->y / cluster_max_hand;
+			hand_ave_dbscan_pose->point.z = hand_ave_dbscan->z / cluster_max_hand;
 		}
 	}
 	return true;

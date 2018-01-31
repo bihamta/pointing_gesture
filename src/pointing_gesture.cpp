@@ -2,7 +2,7 @@
 
 #define MIN_POINTS 10
 #define EPSILON 0.02
-#define ROBOT_HEIGHT 1.14;
+#define ROBOT_HEIGHT 1.2;
 
 PointingGesture::PointingGesture(ros::NodeHandle& _nh, ros::NodeHandle& _pnh) : nh(_nh), pnh(_pnh)
 {

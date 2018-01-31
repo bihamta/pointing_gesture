@@ -1,0 +1,18 @@
+header: 
+  seq: 13749
+  stamp: 
+    secs: 1515448957
+    nsecs: 284651831
+  frame_id: /world
+child_frame_id: vicon/Cam23/Cam23
+transform: 
+  translation: 
+    x: 0.120116659023
+    y: 2.92055570391
+    z: 1.1427336175
+  rotation: 
+    x: -0.0105979511515
+    y: -0.0116276535486
+    z: -0.722370428105
+    w: 0.691327307217
+

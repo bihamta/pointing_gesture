@@ -149,9 +149,9 @@ def vicon_glove_callback(data):
 #print " "
     print "Vicon Yaw: " , vicon_yaw_deg, "Vicon Pitch: " , vicon_pitch_deg
     print "Yaw Average: " , math.fabs(face_ave_yaw_deg - vicon_yaw_deg), "Pitch Average: " , math.fabs(face_ave_pitch_deg - vicon_pitch_deg) 
-    print "Yaw Median: " ,  math.fabs(face_med_yaw_deg - vicon_yaw_deg), "Pitch Median: " , math.fabs(face_med_pitch_deg - vicon_pitch_deg)
-    print "Yaw Closest: " , math.fabs(face_cls_yaw_deg - vicon_yaw_deg), "Pitch Closest: " , math.fabs(face_cls_pitch_deg - vicon_pitch_deg)
-#      print "Yaw Average DBSCAN: " , math.fabs(face_ave_dbscan_yaw_deg -  vicon_yaw_deg), "Pitch Average DBSCAN: " , math.fabs(face_ave_dbscan_pitch_deg - vicon_pitch_deg))
+#    print "Yaw Median: " ,  math.fabs(face_med_yaw_deg - vicon_yaw_deg), "Pitch Median: " , math.fabs(face_med_pitch_deg - vicon_pitch_deg)
+#    print "Yaw Closest: " , math.fabs(face_cls_yaw_deg - vicon_yaw_deg), "Pitch Closest: " , math.fabs(face_cls_pitch_deg - vicon_pitch_deg)
+    print "Yaw Average DBSCAN: " , math.fabs(face_ave_dbscan_yaw_deg -  vicon_yaw_deg), "Pitch Average DBSCAN: " , math.fabs(face_ave_dbscan_pitch_deg - vicon_pitch_deg)
     print "-------------------------------------------------"
 
 #print " "

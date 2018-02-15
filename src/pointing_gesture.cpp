@@ -1,6 +1,6 @@
 #include <hands_3d/pointing_gesture.h>
 
-#define MIN_POINTS 10
+#define MIN_POINTS 3
 #define EPSILON 0.02
 #define ROBOT_HEIGHT 1.2;
 
@@ -459,6 +459,7 @@ void PointingGesture::detectionCb(const yolo2::ImageDetectionsConstPtr& detectio
 
 	if (!success)
 	{
+    //std::cout << "error while converting" << std::endl;
 		//ROS_WARN_THROTTLE(1, "Reconstruction of the bounding box failed. Will not publish the object! (Bad depth?)");
 		return;
 	}
@@ -750,222 +751,226 @@ bool PointingGesture::convert(const sensor_msgs::ImageConstPtr& depth_msg,
 			if(first_hand_points[i]->z < closest_point_hand->z) {
 				closest_point_hand = first_hand_points[i];
 			}
-		}
-	} else {
-		return false;
-	}
+    }
+    hand_cls_pose->point.x = closest_point_hand->x;
+    hand_cls_pose->point.y = closest_point_hand->y;
+    hand_cls_pose->point.z = closest_point_hand->z;
+  } else {
+    //std::cout << "first hand points == 0 but all hand: " << hand_all.size() << std::endl;
+  }
 
-	//  Closest point to the camera in Pointing FACE
-	if(face_points.size() > 0 ) {
-		closest_point_face = face_points[0];
+  //  Closest point to the camera in Pointing FACE
+  if(face_points.size() > 0 ) {
+    closest_point_face = face_points[0];
 
-		for (int i = 0; i < face_points.size(); i++) {
-			if(face_points[i]->z < closest_point_face->z) {
-				closest_point_face = face_points[i];
-			}
-		}
-	} else {
-		return false;
-	}
-	///Filling Poses
-	face_cls_pose->point.x = closest_point_face->x;
-	face_cls_pose->point.y = closest_point_face->y;
-	face_cls_pose->point.z = closest_point_face->z;
+    for (int i = 0; i < face_points.size(); i++) {
+      if(face_points[i]->z < closest_point_face->z) {
+        closest_point_face = face_points[i];
+      }
+    }
+    face_cls_pose->point.x = closest_point_face->x;
+    face_cls_pose->point.y = closest_point_face->y;
+    face_cls_pose->point.z = closest_point_face->z;
+  } else {
+    //std::cout << "face points == 0 but all face: " << face_all.size() << std::endl;
+  }
 
-	hand_cls_pose->point.x = closest_point_hand->x;
-	hand_cls_pose->point.y = closest_point_hand->y;
-	hand_cls_pose->point.z = closest_point_hand->z;
 
-	/*
-	////Finding Angle
-	if (first_hand_points.size() > 0){
-	roll_closest = 0;
-	pitch_closest = atan2((closest_point_hand->x - closest_point_face->x), ( closest_point_hand->z - closest_point_face->z)) - PI/2;
-	yaw_closest = 0;
+  /*
+  ////Finding Angle
+  if (first_hand_points.size() > 0){
+  roll_closest = 0;
+  pitch_closest = atan2((closest_point_hand->x - closest_point_face->x), ( closest_point_hand->z - closest_point_face->z)) - PI/2;
+  yaw_closest = 0;
 
-	tf::Quaternion arrow_angle_closest = tf::createQuaternionFromRPY(roll_closest , pitch_closest, yaw_closest);
+  tf::Quaternion arrow_angle_closest = tf::createQuaternionFromRPY(roll_closest , pitch_closest, yaw_closest);
 
-	arrow_closest->pose.position.x = closest_point_face->x;
-	arrow_closest->pose.position.y = closest_point_face->y;
-	arrow_closest->pose.position.z = closest_point_face->z;
-	arrow_closest->pose.orientation.x = arrow_angle_closest.getX();
-	arrow_closest->pose.orientation.y = arrow_angle_closest.getY();
-	arrow_closest->pose.orientation.z = arrow_angle_closest.getZ();
-	arrow_closest->pose.orientation.w = arrow_angle_closest.getW();
-	}
-	 */
+  arrow_closest->pose.position.x = closest_point_face->x;
+  arrow_closest->pose.position.y = closest_point_face->y;
+  arrow_closest->pose.position.z = closest_point_face->z;
+  arrow_closest->pose.orientation.x = arrow_angle_closest.getX();
+  arrow_closest->pose.orientation.y = arrow_angle_closest.getY();
+  arrow_closest->pose.orientation.z = arrow_angle_closest.getZ();
+  arrow_closest->pose.orientation.w = arrow_angle_closest.getW();
+  }
+   */
 
-	//Median Point
-	Point3* face_point_med = NULL;
-	Point3* hand_point_med = NULL;
-	if (first_hand_points.size() > 0) {
-		hand_point_med = points_median(first_hand_points); 
-	} else {
-		return false;
-	}
-	if (face_points.size() > 0 ) {
-		face_point_med = points_median(face_points);
-	} else {
-		return false;
-	}
-	//Filling Poses	
-	face_med_pose->point.x = face_point_med->x;
-	face_med_pose->point.y = face_point_med->y;
-	face_med_pose->point.z = face_point_med->z;
+  //Median Point
+  Point3* face_point_med = NULL;
+  Point3* hand_point_med = NULL;
+  if (first_hand_points.size() > 0) {
+    hand_point_med = points_median(first_hand_points); 
+    hand_med_pose->point.x = hand_point_med->x;
+    hand_med_pose->point.y = hand_point_med->y;
+    hand_med_pose->point.z = hand_point_med->z;
+  } else {
+    //std::cout << "first hand points == 0 but all: " << hand_all.size() << std::endl;
+  }
+  if (face_points.size() > 0 ) {
+    face_point_med = points_median(face_points);
+    face_med_pose->point.x = face_point_med->x;
+    face_med_pose->point.y = face_point_med->y;
+    face_med_pose->point.z = face_point_med->z;
+  } else {
+    //std::cout << "face points == 0 but all: " << face_all.size() << std::endl;
+  }
 
-	hand_med_pose->point.x = hand_point_med->x;
-	hand_med_pose->point.y = hand_point_med->y;
-	hand_med_pose->point.z = hand_point_med->z;
-	/* 
-	////Finding Angle
-	roll_med = 0;
-	pitch_med = atan2(hand_point_med->x - face_point_med->x, hand_point_med->z - face_point_med->z) - PI/2;
-	yaw_med =0;
+  /* 
+  ////Finding Angle
+  roll_med = 0;
+  pitch_med = atan2(hand_point_med->x - face_point_med->x, hand_point_med->z - face_point_med->z) - PI/2;
+  yaw_med =0;
 
-	tf::Quaternion arrow_angle_med = tf::createQuaternionFromRPY(roll_med, pitch_med, yaw_med);
+  tf::Quaternion arrow_angle_med = tf::createQuaternionFromRPY(roll_med, pitch_med, yaw_med);
 
-	arrow_med->pose.position.x = face_point_med->x;
-	arrow_med->pose.position.y = face_point_med->y;
-	arrow_med->pose.position.z = face_point_med->z;
-	arrow_med->pose.orientation.x = arrow_angle_med.getX();
-	arrow_med->pose.orientation.y = arrow_angle_med.getY();
-	arrow_med->pose.orientation.z = arrow_angle_med.getZ();
-	arrow_med->pose.orientation.w = arrow_angle_med.getW();
-*/	
-	visualization_msgs::Marker::Ptr arrowMarker_ave (new visualization_msgs::Marker);
-	arrowMarker_ave->header = depth_msg->header;
-	arrowMarker_ave->type = visualization_msgs::Marker::ARROW;
-	arrowMarker_ave->action = visualization_msgs::Marker::ADD;
-	arrowMarker_ave->color.a = 1.0;
-	arrowMarker_ave->scale.x = 0.01;
-	arrowMarker_ave->scale.y = 0.1;
-	arrowMarker_ave->scale.z = 0.1;
+  arrow_med->pose.position.x = face_point_med->x;
+  arrow_med->pose.position.y = face_point_med->y;
+  arrow_med->pose.position.z = face_point_med->z;
+  arrow_med->pose.orientation.x = arrow_angle_med.getX();
+  arrow_med->pose.orientation.y = arrow_angle_med.getY();
+  arrow_med->pose.orientation.z = arrow_angle_med.getZ();
+  arrow_med->pose.orientation.w = arrow_angle_med.getW();
+   */	
+  visualization_msgs::Marker::Ptr arrowMarker_ave (new visualization_msgs::Marker);
+  arrowMarker_ave->header = depth_msg->header;
+  arrowMarker_ave->type = visualization_msgs::Marker::ARROW;
+  arrowMarker_ave->action = visualization_msgs::Marker::ADD;
+  arrowMarker_ave->color.a = 1.0;
+  arrowMarker_ave->scale.x = 0.01;
+  arrowMarker_ave->scale.y = 0.1;
+  arrowMarker_ave->scale.z = 0.1;
 
-	arrowMarker_ave->points.resize(2);
-	arrowMarker_ave->points[0].x = face_points_ave->x;
-	arrowMarker_ave->points[0].y = face_points_ave->y;
-	arrowMarker_ave->points[0].z = face_points_ave->z;
+  arrowMarker_ave->points.resize(2);
+  arrowMarker_ave->points[0].x = face_points_ave->x;
+  arrowMarker_ave->points[0].y = face_points_ave->y;
+  arrowMarker_ave->points[0].z = face_points_ave->z;
 
-	arrowMarker_ave->points[1].x = pointing_hand_ave->x;
-	arrowMarker_ave->points[1].y = pointing_hand_ave->y;
-	arrowMarker_ave->points[1].z = pointing_hand_ave->z;
+  arrowMarker_ave->points[1].x = pointing_hand_ave->x;
+  arrowMarker_ave->points[1].y = pointing_hand_ave->y;
+  arrowMarker_ave->points[1].z = pointing_hand_ave->z;
 
-	arrowMarker_ave->colors.resize(2);
-	arrowMarker_ave->colors[0].r = 255;
-	arrowMarker_ave->colors[0].g = 0;
-	arrowMarker_ave->colors[0].b = 0;
-	arrowMarker_ave->colors[0].a = 1;
+  arrowMarker_ave->colors.resize(2);
+  arrowMarker_ave->colors[0].r = 255;
+  arrowMarker_ave->colors[0].g = 0;
+  arrowMarker_ave->colors[0].b = 0;
+  arrowMarker_ave->colors[0].a = 1;
 
-	arrowMarker_ave->colors[1].r = 1;
-	arrowMarker_ave->colors[1].g = 0;
-	arrowMarker_ave->colors[1].b = 0;
-	arrowMarker_ave->colors[1].a = 1;
+  arrowMarker_ave->colors[1].r = 1;
+  arrowMarker_ave->colors[1].g = 0;
+  arrowMarker_ave->colors[1].b = 0;
+  arrowMarker_ave->colors[1].a = 1;
 
-	pub_arrowMarker_ave.publish(arrowMarker_ave);
-	std::cout << "here" << std::endl;
-	// Clustering
-	if( face_all.size() > 0 && hand_all.size() > 0){
-		int cluster_max_face = 0, cluster_max_face_index = 0;
-		int cluster_max_hand = 0, cluster_max_hand_index = 0;
-		Point3* face_ave_dbscan = new Point3();
-		Point3* hand_ave_dbscan = new Point3();
-		std::vector<DBSCAN::Cluster> clusters_face = dbscan_face->cluster(face_all, EPSILON, MIN_POINTS);
-		std::vector<DBSCAN::Cluster> clusters_hand = dbscan_hand->cluster(hand_all, EPSILON, MIN_POINTS);
-		if (clusters_face.size() > 0 && clusters_hand.size() > 0 ){
-			for (int i = 0; i < clusters_face.size(); i++) {
-				if (clusters_face[i].points.size() > cluster_max_face) {
-					cluster_max_face = clusters_face[i].points.size();
-					cluster_max_face_index = i;
-				}
-			}
-			for (int j = 0; j < cluster_max_face; j++) {
-				face_ave_dbscan->x += clusters_face[cluster_max_face_index].points[j]->x;
-				face_ave_dbscan->y += clusters_face[cluster_max_face_index].points[j]->y;
-				face_ave_dbscan->z += clusters_face[cluster_max_face_index].points[j]->z;
-			}
-			for (int k = 0; k < clusters_hand.size(); k++) {
-				if (clusters_hand[k].points.size() > cluster_max_hand) {
-					cluster_max_hand = clusters_hand[k].points.size();
-					cluster_max_hand_index = k;
-				}
-			}
-			for (int l = 0; l < cluster_max_hand; l++) {
-				hand_ave_dbscan->x += clusters_hand[cluster_max_hand_index].points[l]->x;
-				hand_ave_dbscan->y += clusters_hand[cluster_max_hand_index].points[l]->y;
-				hand_ave_dbscan->z += clusters_hand[cluster_max_hand_index].points[l]->z;
-			}
-			//Filling Poses	
-			face_ave_dbscan_pose->point.x = face_ave_dbscan->x / cluster_max_face;
-			face_ave_dbscan_pose->point.y = face_ave_dbscan->y / cluster_max_face;
-			face_ave_dbscan_pose->point.z = face_ave_dbscan->z / cluster_max_face;
+  pub_arrowMarker_ave.publish(arrowMarker_ave);
+  //std::cout << "here" << std::endl;
+  // Clustering
+  if( face_all.size() > 0 && hand_all.size() > 0){
+    for (int h = 0; h < face_all.size(); h++)
+        std::cout << "face points: " << face_all[h]->x << std::endl;
+    int cluster_max_face = 0, cluster_max_face_index = 0;
+    int cluster_max_hand = 0, cluster_max_hand_index = 0;
+    Point3* face_ave_dbscan = new Point3();
+    Point3* hand_ave_dbscan = new Point3();
+    std::vector<DBSCAN::Cluster> clusters_face = dbscan_face->cluster(face_all, EPSILON, MIN_POINTS);
+    std::vector<DBSCAN::Cluster> clusters_hand = dbscan_hand->cluster(hand_all, EPSILON, MIN_POINTS); 
+    std::cout << "cluster face: " << clusters_face.size() << "  cluster hand: " << clusters_hand.size() << std::endl;
+    if (clusters_face.size() > 0 && clusters_hand.size() > 0 ){
+      for (int i = 0; i < clusters_face.size(); i++) {
+        for (int f = 0; f < clusters_face[i].points.size(); f++)
+           std::cout << clusters_face[i].points[f]->x << std::endl;
+        if (clusters_face[i].points.size() > cluster_max_face) {
+          cluster_max_face = clusters_face[i].points.size();
+          cluster_max_face_index = i;
+        }
+      }
+      for (int j = 0; j < cluster_max_face; j++) {
+        face_ave_dbscan->x += clusters_face[cluster_max_face_index].points[j]->x;
+        face_ave_dbscan->y += clusters_face[cluster_max_face_index].points[j]->y;
+        face_ave_dbscan->z += clusters_face[cluster_max_face_index].points[j]->z;
+      }
+      for (int k = 0; k < clusters_hand.size(); k++) {
+        if (clusters_hand[k].points.size() > cluster_max_hand) {
+          cluster_max_hand = clusters_hand[k].points.size();
+          cluster_max_hand_index = k;
+        }
+      }
+      for (int l = 0; l < cluster_max_hand; l++) {
+        hand_ave_dbscan->x += clusters_hand[cluster_max_hand_index].points[l]->x;
+        hand_ave_dbscan->y += clusters_hand[cluster_max_hand_index].points[l]->y;
+        hand_ave_dbscan->z += clusters_hand[cluster_max_hand_index].points[l]->z;
+      }
+      //Filling Poses	
+      face_ave_dbscan_pose->point.x = face_ave_dbscan->x / cluster_max_face;
+      face_ave_dbscan_pose->point.y = face_ave_dbscan->y / cluster_max_face;
+      face_ave_dbscan_pose->point.z = face_ave_dbscan->z / cluster_max_face;
 
-			hand_ave_dbscan_pose->point.x = hand_ave_dbscan->x / cluster_max_hand;
-			hand_ave_dbscan_pose->point.y = hand_ave_dbscan->y / cluster_max_hand;
-			hand_ave_dbscan_pose->point.z = hand_ave_dbscan->z / cluster_max_hand;
-		}
-	}
-	return true;
+      hand_ave_dbscan_pose->point.x = hand_ave_dbscan->x / cluster_max_hand;
+      hand_ave_dbscan_pose->point.y = hand_ave_dbscan->y / cluster_max_hand;
+      hand_ave_dbscan_pose->point.z = hand_ave_dbscan->z / cluster_max_hand;
+    }
+  }
+  return true;
 
 }
 Point3* PointingGesture::points_median(std::vector<Point3*> &v)
 {
-	size_t n = v.size() / 2;
-	nth_element(v.begin(), v.begin()+n, v.end());
-	return v[n];
+  size_t n = v.size() / 2;
+  nth_element(v.begin(), v.begin()+n, v.end());
+  return v[n];
 }
 
 bool PointingGesture::finding_end_point( const geometry_msgs::PointStamped::Ptr& hand_ave_pose, 
-		const geometry_msgs::PointStamped::Ptr& face_ave_pose, 
-		const geometry_msgs::PointStamped::Ptr& end_point) 
+    const geometry_msgs::PointStamped::Ptr& face_ave_pose, 
+    const geometry_msgs::PointStamped::Ptr& end_point) 
 {
-	/*
-	   float pointing_yaw = 0;
-	   float pointing_roll = 0;
-	   float pointing_pitch = 0;
-	   int x_sign = -1, z_sign = +1;
+  /*
+     float pointing_yaw = 0;
+     float pointing_roll = 0;
+     float pointing_pitch = 0;
+     int x_sign = -1, z_sign = +1;
 
-	   pointing_yaw = atan2(face_ave_pose->point.x - hand_ave_pose->point.x, face_ave_pose->point.z - hand_ave_pose->point.z);
+     pointing_yaw = atan2(face_ave_pose->point.x - hand_ave_pose->point.x, face_ave_pose->point.z - hand_ave_pose->point.z);
 
-	   pointing_pitch = PI/2 - ((atan2(sqrt(pow(face_ave_pose->point.x - hand_ave_pose->point.x, 2) + pow(face_ave_pose->point.z - hand_ave_pose->point.z, 2)), face_ave_pose->point.y - hand_ave_pose->point.y) - PI/2 ));
+     pointing_pitch = PI/2 - ((atan2(sqrt(pow(face_ave_pose->point.x - hand_ave_pose->point.x, 2) + pow(face_ave_pose->point.z - hand_ave_pose->point.z, 2)), face_ave_pose->point.y - hand_ave_pose->point.y) - PI/2 ));
 
-	   float Y = 0, X = 0, Z = 0; //Y is Height and Z is Depth ( assumption )
+     float Y = 0, X = 0, Z = 0; //Y is Height and Z is Depth ( assumption )
 
-	   if (pointing_yaw < -(PI/2) && pointing_yaw > -PI)
-	   {
-	   x_sign = 1;
-	   z_sign = 1;
-	   }else if(pointing_yaw > PI/2 && pointing_yaw < PI){
-	   x_sign = 1;
-	   z_sign = 1;
-	   }else if (pointing_yaw > 0){
-	   x_sign = -1;
-	   z_sign = -1;
-	   } else {
-	   x_sign = -1;
-	   z_sign = -1;
-	   }
-	   Y = -face_ave_pose->point.y + ROBOT_HEIGHT;
-	   Z = Y * tan(pointing_pitch);
-	   X = x_sign * (Z * tan(pointing_yaw));
-	 */
-	double real_y_face = 0, real_y_hand = 0;
-	
-	real_y_face = -face_ave_pose->point.y + ROBOT_HEIGHT;
-	real_y_hand= -hand_ave_pose->point.y + ROBOT_HEIGHT;
-	double x_coeff = (face_ave_pose->point.x - hand_ave_pose->point.x);
-	double y_coeff = (real_y_face - real_y_hand);
-	double z_coeff = (face_ave_pose->point.z - hand_ave_pose->point.z);
-	double t = face_ave_pose->point.y / y_coeff;
-	end_point->point.x = face_ave_pose->point.x - x_coeff * t;
-	end_point->point.y = 0;
-	end_point->point.z = face_ave_pose->point.z - z_coeff * t;
-	std::cout << "X: " << end_point->point.x << " Z: " << end_point->point.z << std::endl;
+     if (pointing_yaw < -(PI/2) && pointing_yaw > -PI)
+     {
+     x_sign = 1;
+     z_sign = 1;
+     }else if(pointing_yaw > PI/2 && pointing_yaw < PI){
+     x_sign = 1;
+     z_sign = 1;
+     }else if (pointing_yaw > 0){
+     x_sign = -1;
+     z_sign = -1;
+     } else {
+     x_sign = -1;
+     z_sign = -1;
+     }
+     Y = -face_ave_pose->point.y + ROBOT_HEIGHT;
+     Z = Y * tan(pointing_pitch);
+     X = x_sign * (Z * tan(pointing_yaw));
+   */
+  double real_y_face = 0, real_y_hand = 0;
 
-	return true;
-	/*   tf::Quaternion q(quat.x, quat.y, quat.z, quat.w);
-	     tf::Matrix3x3 m(q);
-	     double roll, pitch, yaw;
-	     m.getRPY(roll, pitch, yaw);
-	     std::cout << "Roll: " << roll << ", Pitch: " << pitch << ", Yaw: " << yaw << std::endl;
-	 */
+  real_y_face = -face_ave_pose->point.y + ROBOT_HEIGHT;
+  real_y_hand= -hand_ave_pose->point.y + ROBOT_HEIGHT;
+  double x_coeff = (face_ave_pose->point.x - hand_ave_pose->point.x);
+  double y_coeff = (real_y_face - real_y_hand);
+  double z_coeff = (face_ave_pose->point.z - hand_ave_pose->point.z);
+  // double t = face_ave_pose->point.y / y_coeff;
+  double t = real_y_face / y_coeff;
+  end_point->point.x = face_ave_pose->point.x - x_coeff * t;
+  end_point->point.y = 0;
+  end_point->point.z = face_ave_pose->point.z - z_coeff * t;
+  //std::cout << "X: " << end_point->point.x << " Z: " << end_point->point.z << std::endl;
+
+  return true;
+  /*   tf::Quaternion q(quat.x, quat.y, quat.z, quat.w);
+       tf::Matrix3x3 m(q);
+       double roll, pitch, yaw;
+       m.getRPY(roll, pitch, yaw);
+       std::cout << "Roll: " << roll << ", Pitch: " << pitch << ", Yaw: " << yaw << std::endl;
+   */
 }
